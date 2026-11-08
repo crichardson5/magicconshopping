@@ -206,6 +206,13 @@
       .auth-panel .auth-links button{background:transparent;border:1px solid #58617a}
       .auth-panel label{display:block;margin:12px 0 3px}
       .auth-panel .notice{color:#d8f7c5;white-space:pre-line}
+      .management-group h3{margin:0 0 8px;font-size:15px}
+      .management-group + .management-group{margin-top:18px;padding-top:16px;border-top:1px solid #3a3f58}
+      .management-group .list-note{margin:8px 0 0}
+      @media(max-width:650px){
+        .management-group .controls > *{flex:1 1 100%}
+        .management-group .controls select{width:100%}
+      }
     </style>
   </head>
   <body>
@@ -246,7 +253,7 @@
     <div id="app" hidden>
     <div class="list-panel">
       <h2 style="margin-top:0">Shared lists</h2>
-      <div class="controls"><select id="activeList" aria-label="Select shared list"><option>Loading lists…</option></select><button id="createFromJson" type="button">Upload JSON as new shared list</button><input id="newListFile" type="file" accept=".json,application/json" hidden></div>
+      <div class="controls"><select id="activeList" aria-label="Select shared list"><option>Loading lists…</option></select></div>
       <div class="list-actions"><button id="removeList" type="button" class="danger" hidden>Delete selected list</button><span class="list-note">Everyone sees every shared list and items marked off sync for all users. Uploading creates a new list; it never replaces an existing one.</span></div>
     </div>
     <div class="top">
@@ -267,13 +274,7 @@
             <option value="deck-color">By deck, then color identity</option>
           </select>
         </label>
-        <select id="hostedListSelect" aria-label="Choose a hosted JSON card list">
-          <option value="">Loading hosted lists…</option>
-        </select>
-        <button id="loadHostedList" type="button" disabled>Add hosted list</button>
         <button id="load">Update Prices and Color Identity</button>
-        <button class="secondary" id="export">Export CSV</button>
-        <button class="secondary" id="save">Export JSON snapshot</button>
 
       </div>
       <div class="muted" id="status" role="status">Sign in to load shared lists.</div>
@@ -300,6 +301,32 @@
       </div>
     </section>
     <section id="otherSection" hidden><h2>Other shopping items</h2><div id="extraRows"></div></section>
+    <section class="list-panel" id="listManagement" aria-labelledby="listManagementHeading">
+      <h2 id="listManagementHeading" style="margin-top:0">List Management</h2>
+      <div class="management-group">
+        <h3>Upload a shared list</h3>
+        <div class="controls">
+          <button id="createFromJson" type="button">Upload JSON as new shared list</button>
+          <input id="newListFile" type="file" accept=".json,application/json" hidden>
+        </div>
+      </div>
+      <div class="management-group">
+        <h3>Add a hosted list</h3>
+        <div class="controls">
+          <select id="hostedListSelect" aria-label="Choose a hosted JSON card list">
+            <option value="">Loading hosted lists…</option>
+          </select>
+          <button id="loadHostedList" type="button" disabled>Add hosted list</button>
+        </div>
+      </div>
+      <div class="management-group">
+        <h3>Export</h3>
+        <div class="controls">
+          <button class="secondary" id="export">Export CSV</button>
+          <button class="secondary" id="save">Export JSON snapshot</button>
+        </div>
+      </div>
+    </section>
     </div>
     <footer>JSON lists accept {"name":"List name","cards":[{"deck":"Deck","qty":1,"name":"Card name","note":"Optional","colorIdentity":["W","B"]}]}. Also supports a bare cards array. Use color codes W, U, B, R, G in an array; leave colorIdentity null to load it from Scryfall with prices. Prices are the lowest Scryfall paper USD prices found for each card; they are indicative market prices, not verified active seller listings. Prices may be unavailable when the browser blocks API requests. Shipping, condition and availability are not included.</footer>
 <script type="module" src="./app.js"></script>
