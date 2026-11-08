@@ -83,6 +83,9 @@
       .sort-control select {
         width:auto
       }
+      #hostedListSelect {
+        width:min(100%,240px)
+      }
       .card-table-wrap {
         overflow-x:auto
       }
@@ -124,14 +127,6 @@
         width:19px;
         height:19px;
         accent-color:#a47ae5
-      }
-      input[type=number] {
-        width:83px;
-        padding:7px;
-        border:1px solid #5c637e;
-        border-radius:7px;
-        background:#1b2031;
-        color:white
       }
       .sort-control {
         display:flex;
@@ -183,9 +178,6 @@
         td:nth-child(2) {
           width:30px
         }
-        input[type=number] {
-          width:65px
-        }
         .name {
           font-size:12px
         }
@@ -193,15 +185,13 @@
     </style>
   </head>
   <body>
-    <h1>MagicCon Shopping Checklist</h1>
-    <p class="muted">Import your card list from a separate JSON file. Check off purchases, record what you paid, and compare Scryfall's indicative USD prices when available.</p>
+    <h1>🖤 MagicCon Shopping Checklist</h1>
+    <p class="muted">Choose a card list hosted beside this page or import a separate JSON file. Update prices to fill in missing color identities.</p>
     <div class="top">
       <div class="stats">
         <span>Cards: <b id="progress">0 / 0</b>
         </span>
         <span>Estimated remaining: <b id="remaining">Not priced yet</b>
-        </span>
-        <span>Spent: <b id="spent">$0.00</b>
         </span>
         <span>Prices loaded: <b id="priced">0 / 0</b>
         </span>
@@ -211,12 +201,16 @@
         <label class="sort-control">Sort cards
           <select id="sortOrder">
             <option value="deck">By deck</option>
-            <option value="color">By color identity</option>
+            <option value="color">By color identity, then deck</option>
+            <option value="deck-color">By deck, then color identity</option>
           </select>
         </label>
-        <label class="secondary" style="cursor:pointer">Import card list
-          <input id="cardListImport" type="file" accept=".json,application/json" hidden>
-        </label>
+        <select id="hostedListSelect" aria-label="Choose a hosted card list">
+          <option value="">Loading hosted lists…</option>
+        </select>
+        <button id="loadHostedList" type="button" disabled>Load selected list</button>
+        <button id="importCardListButton" type="button">Import Card List</button>
+        <input id="cardListImport" type="file" accept=".json,application/json" hidden>
         <button id="load">Update cheapest prices</button>
         <button class="secondary" id="export">Export CSV</button>
         <button class="secondary" id="save">Save backup</button>
@@ -237,11 +231,10 @@
             <th>Color identity</th>
             <th>Card / notes</th>
             <th>Scryfall USD</th>
-            <th>Paid each</th>
           </tr>
         </thead>
         <tbody id="cardRows">
-          <tr><td colspan="7" class="muted">Import a card-list JSON file to get started.</td></tr>
+          <tr><td colspan="6" class="muted">Import or load a card list to get started.</td></tr>
         </tbody>
       </table>
       </div>
@@ -321,7 +314,7 @@
           <input type="checkbox" class="extra-check"> MagicCon Atlanta shirt: women’s L or unisex M</label>
       </div>
     </section>
-    <footer>Card-list JSON fields: deck, qty, name, note, and colorIdentity. Use color codes W, U, B, R, G in an array; leave colorIdentity null to load it from Scryfall with prices. Prices are the lowest Scryfall paper USD prices found for each card; they are indicative market prices, not verified active seller listings. Prices may be unavailable when the browser blocks API requests. Shipping, condition and availability are not included. The CSV includes all cards even if live prices fail.</footer>
+    <footer>Card-list JSON fields: deck, qty, name, note, and colorIdentity. Use color codes W, U, B, R, G in an array; leave colorIdentity null to load it from Scryfall with prices. Prices are the lowest Scryfall paper USD prices found for each card; they are indicative market prices, not verified active seller listings. Prices may be unavailable when the browser blocks API requests. Shipping, condition and availability are not included.</footer>
 <script>
 let cards = [];
 let rows = [];
@@ -458,7 +451,12 @@ function sortedIndexes() {
       if (byColor) return byColor;
     }
     const byDeck = a.deck.localeCompare(b.deck);
-    return byDeck || a.name.localeCompare(b.name);
+    if (byDeck) return byDeck;
+    if (mode === 'deck-color') {
+      const byColor = colorSortKey(a).localeCompare(colorSortKey(b));
+      if (byColor) return byColor;
+    }
+    return a.name.localeCompare(b.name);
   });
 
   return indexes;
@@ -468,7 +466,7 @@ function renderCards() {
   const body = $('cardRows');
 
   if (!cards.length) {
-    body.innerHTML = '<tr><td colspan="7" class="muted">Import a card-list JSON file to get started.</td></tr>';
+    body.innerHTML = '<tr><td colspan="6" class="muted">Import or load a card list to get started.</td></tr>';
     rows = [];
     $('cardCount').textContent = '(0 cards)';
     $('progress').textContent = '0 / 0';
@@ -492,7 +490,6 @@ function renderCards() {
       escapeHtml(card.name) + '</a>' + note + '</td>' +
       '<td class="price"><span class="estimate">—</span><small><a href="' + escapeHtml(cardUrl) +
       '" target="_blank" rel="noopener">View printings</a></small></td>' +
-      '<td><input class="paid" type="number" min="0" step="0.01" placeholder="—" aria-label="Paid per copy"></td>' +
       '</tr>';
   }).join('');
 
@@ -508,11 +505,6 @@ function renderCards() {
       totals();
     });
 
-    row.querySelector('.paid').addEventListener('input', event => {
-      saveCardState(index, { paid: event.target.value });
-      persist();
-      totals();
-    });
   });
 
   $('cardCount').textContent = '(' + cards.length + ' cards)';
@@ -525,8 +517,6 @@ function apply() {
     const saved = savedFor(index);
     row.querySelector('.check').checked = !!saved.checked;
     row.classList.toggle('checked', !!saved.checked);
-    row.querySelector('.paid').value = saved.paid ?? '';
-
     if (saved.price != null) {
       prices[index] = Number(saved.price);
       row.querySelector('.estimate').textContent = money(saved.price);
@@ -542,7 +532,6 @@ function apply() {
 
 function totals() {
   let checked = 0;
-  let spent = 0;
   let remaining = 0;
   let loaded = 0;
 
@@ -550,9 +539,6 @@ function totals() {
     if (!row) return;
     const saved = savedFor(index);
     if (saved.checked) checked++;
-    if (saved.checked && saved.paid !== '' && saved.paid != null) {
-      spent += cards[index].qty * Number(saved.paid);
-    }
     if (prices[index] != null) {
       loaded++;
       if (!saved.checked) remaining += cards[index].qty * prices[index];
@@ -560,7 +546,6 @@ function totals() {
   });
 
   $('progress').textContent = checked + ' / ' + cards.length;
-  $('spent').textContent = money(spent);
   $('priced').textContent = loaded + ' / ' + cards.length;
   $('remaining').textContent = loaded ? money(remaining) + ' (priced only)' : 'Not priced yet';
 }
@@ -607,6 +592,9 @@ $('cardListImport').addEventListener('change', async event => {
 
 $('sortOrder').addEventListener('change', () => {
   renderCards();
+  if ($('sortOrder').value !== 'deck' && cards.some(card => !Array.isArray(card.colorIdentity))) {
+    loadPrices();
+  }
 });
 
 $('search').addEventListener('input', event => {
@@ -665,8 +653,7 @@ $('export').onclick = () => {
     'Card',
     'Notes',
     'Bought',
-    'Scryfall estimate USD each',
-    'Paid USD each'
+    'Scryfall estimate USD each'
   ]];
 
   cards.forEach((card, index) => {
@@ -678,8 +665,7 @@ $('export').onclick = () => {
       card.name,
       card.note,
       !!saved.checked,
-      prices[index] ?? saved.price ?? '',
-      saved.paid ?? ''
+      prices[index] ?? saved.price ?? ''
     ]);
   });
 
@@ -696,6 +682,7 @@ const PRICE_REQUEST_GAP = 500;
 
 async function loadPrices() {
   const button = $('load');
+  if (button.disabled) return;
   if (!cards.length) {
     $('status').textContent = 'Import a card-list JSON file before loading prices.';
     return;
@@ -838,8 +825,61 @@ document.querySelectorAll('[data-extra]').forEach(row => {
     persist();
   });
 });
+
+$('importCardListButton').addEventListener('click', () => $('cardListImport').click());
+
+let hostedLists = [];
+$('hostedListSelect').addEventListener('change', event => {
+  $('loadHostedList').disabled = event.target.value === '';
+});
+
+$('loadHostedList').addEventListener('click', async () => {
+  const selected = $('hostedListSelect').value;
+  const entry = selected === '' ? null : hostedLists[Number(selected)];
+  if (!entry) return;
+
+  try {
+    const directory = new URL('.', document.baseURI);
+    const listUrl = new URL(entry.file, directory);
+    const response = await fetch(listUrl, { cache: 'no-cache' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    setCardList(await response.json());
+  } catch (error) {
+    $('status').textContent = 'Could not load hosted card list: ' + error.message;
+  }
+});
+
+async function loadHostedLists() {
+  const select = $('hostedListSelect');
+  try {
+    const response = await fetch(new URL('card-lists.json', document.baseURI), { cache: 'no-cache' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+
+    const manifest = await response.json();
+    const entries = Array.isArray(manifest) ? manifest : manifest.lists;
+    if (!Array.isArray(entries)) throw new Error('The catalog has no lists array.');
+
+    const directory = new URL('.', document.baseURI);
+    hostedLists = entries.filter(entry => {
+      if (!entry || typeof entry.name !== 'string' || typeof entry.file !== 'string') return false;
+      if (entry.file.startsWith('/') || entry.file.split('/').includes('..')) return false;
+      const fileUrl = new URL(entry.file, directory);
+      return fileUrl.origin === directory.origin && fileUrl.pathname.startsWith(directory.pathname);
+    });
+
+    if (!hostedLists.length) throw new Error('The catalog contains no usable lists.');
+    select.innerHTML = '<option value="">Choose a hosted card list…</option>' +
+      hostedLists.map((entry, index) =>
+        '<option value="' + index + '">' + escapeHtml(entry.name) + '</option>'
+      ).join('');
+  } catch (error) {
+    select.innerHTML = '<option value="">Hosted lists unavailable here</option>';
+    $('loadHostedList').disabled = true;
+  }
+}
+
 loadSavedCards();
+loadHostedLists();
 </script>
 
 </body>
-</html>
