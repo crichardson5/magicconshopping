@@ -6,6 +6,20 @@ const colorOrder = ['W','U','B','R','G'];
 const colorNames = {W:'White',U:'Blue',B:'Black',R:'Red',G:'Green'};
 let user = null, lists = [], activeId = null, items = [], cardRows = [], channel = null, hostedLists = [];
 let generation = 0, syncing = false;
+let recoveryMode = false;
+function showAuthView(view) {
+  for (const name of ['login','requestReset','recovery']) $(name + 'View').hidden = name !== view;
+  $('authError').textContent = '';
+  $('authNotice').textContent = '';
+  $('authPanel').hidden = false;
+  $('signedInPanel').hidden = true;
+  $('app').hidden = true;
+}
+function authError(error) { $('authError').textContent = error?.message || String(error); }
+function recoveryRedirectUrl() {
+  // The same hosted page receives the recovery session. Must be allowlisted in Supabase.
+  return window.location.origin + window.location.pathname;
+}
 function message(m) { $('status').textContent = m; }
 function syncMessage(m) { $('syncState').textContent = m; }
 function html(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -105,6 +119,7 @@ function realtime(){
  .subscribe(s=>{if(s==='SUBSCRIBED')syncMessage('Live');else if(s==='CHANNEL_ERROR'||s==='TIMED_OUT')syncMessage('Sync disconnected — refresh to retry');});
 }
 async function handleSession(session){
+ if(recoveryMode)return;
  const next=session?.user||null;
  if(user?.id===next?.id)return;
  const epoch=++generation;user=next;
@@ -119,13 +134,58 @@ async function handleSession(session){
   await loadLists();realtime();
  }catch(e){message('Could not load lists: '+e.message);syncMessage('Error');}
 }
-$('authForm').addEventListener('submit',async e=>{e.preventDefault();$('authError').textContent='';$('signIn').disabled=true;
- const {error}=await supabase.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
- $('signIn').disabled=false;if(error)$('authError').textContent=error.message;
+$('authForm').addEventListener('submit',async e=>{
+ e.preventDefault();$('authError').textContent='';$('authNotice').textContent='';$('signIn').disabled=true;
+ try { const {error}=await supabase.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+  if(error)throw error;
+ }catch(error){authError(error);}finally{$('signIn').disabled=false;}
+});
+$('showReset').onclick=()=>{showAuthView('requestReset');$('resetEmail').value=$('email').value.trim();};
+$('backToLogin').onclick=()=>showAuthView('login');
+$('requestResetForm').addEventListener('submit',async e=>{
+ e.preventDefault();$('authError').textContent='';$('authNotice').textContent='';$('sendReset').disabled=true;
+ try {
+  const {error}=await supabase.auth.resetPasswordForEmail($('resetEmail').value.trim(),{redirectTo:recoveryRedirectUrl()});
+  if(error)throw error;
+  $('authNotice').textContent='If that email belongs to an account, a password link has been sent. Open the link on this website to set your password. Check spam if needed.';
+ }catch(error){authError(error);}finally{$('sendReset').disabled=false;}
+});
+$('newPasswordForm').addEventListener('submit',async e=>{
+ e.preventDefault();$('authError').textContent='';$('authNotice').textContent='';
+ const password=$('newPassword').value;
+ if(password!==$('confirmPassword').value){authError('Passwords do not match.');return;}
+ if(password.length<8){authError('Use at least eight characters.');return;}
+ $('updatePassword').disabled=true;
+ try {
+  const {error}=await supabase.auth.updateUser({password});
+  if(error)throw error;
+  // Explicitly sign out; next login uses the newly chosen password.
+  recoveryMode=false;
+  const signOutResult=await supabase.auth.signOut();
+  $('newPassword').value='';$('confirmPassword').value='';
+  showAuthView('login');
+  $('authNotice').textContent=signOutResult.error
+   ? 'Password saved. You can now sign in using your new password. ('+signOutResult.error.message+')'
+   : 'Password saved! Sign in with your email and new password.';
+ }catch(error){authError(error);}finally{$('updatePassword').disabled=false;}
 });
 $('signOut').onclick=async()=>{const {error}=await supabase.auth.signOut();if(error)message(error.message);};
-supabase.auth.onAuthStateChange((event,session)=>{if(['INITIAL_SESSION','SIGNED_IN','SIGNED_OUT'].includes(event))setTimeout(()=>handleSession(session),0);});
+supabase.auth.onAuthStateChange((event,session)=>{
+ if(event==='PASSWORD_RECOVERY'){
+  recoveryMode=true;generation++;user=null;
+  if(channel){supabase.removeChannel(channel);channel=null;}
+  showAuthView('recovery');return;
+ }
+ if(['INITIAL_SESSION','SIGNED_IN','SIGNED_OUT'].includes(event)){
+  setTimeout(()=>{if(!recoveryMode)handleSession(session);},0);
+ }
+});
 setAuthVisible(false);
+// If a recovery link returns with an error, display its reason rather than a blank login.
+const urlParams=new URLSearchParams(window.location.hash.replace(/^#/, '') || window.location.search.replace(/^\?/, ''));
+if(urlParams.has('error_description')){
+ showAuthView('login');authError(decodeURIComponent(urlParams.get('error_description')));
+}
 $('activeList').addEventListener('change',async e=>{activeId=e.target.value||null;$('removeList').hidden=!activeList()||activeList()?.created_by!==user.id;await loadItems();});
 $('cardRows').addEventListener('change',e=>{
  const r=e.target.closest('tr[data-id]');if(!r)return;

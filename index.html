@@ -197,12 +197,49 @@
       .extra label{flex:1}
       button.danger{background:#6a3541}
       .subtle-link{font-size:12px}
+      .auth-panel input{max-width:420px}
+      .auth-panel form button{margin-top:6px}
+      .auth-panel .auth-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}
+      .auth-panel .auth-links button{background:transparent;border:1px solid #58617a}
+      .auth-panel label{display:block;margin:12px 0 3px}
+      .auth-panel .notice{color:#d8f7c5;white-space:pre-line}
     </style>
   </head>
   <body>
     <h1>🖤 MagicCon Shopping Checklist</h1>
     <p class="muted">Shared shopping lists with live progress. Import JSON to create a list everyone can see.</p>
-    <div id="authPanel" class="auth-panel"><h2>Sign in to shared shopping</h2><p class="muted">Use your confirmed Supabase account. Only approved checklist members can access lists.</p><form id="authForm"><input id="email" type="email" autocomplete="email" placeholder="Email" required><input id="password" type="password" autocomplete="current-password" placeholder="Password" required><button id="signIn" type="submit">Sign in</button></form><p id="authError" class="warning" role="alert"></p></div>
+    <div id="authPanel" class="auth-panel">
+      <div id="loginView">
+        <h2>Sign in to shared shopping</h2>
+        <p class="muted">Use your confirmed Supabase account. Only approved checklist members can access lists.</p>
+        <form id="authForm">
+          <label for="email">Email</label><input id="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+          <label for="password">Password</label><input id="password" type="password" autocomplete="current-password" placeholder="Your password" required>
+          <button id="signIn" type="submit">Sign in</button>
+        </form>
+        <div class="auth-links"><button id="showReset" type="button">Set your first password / Forgot password?</button></div>
+      </div>
+      <div id="requestResetView" hidden>
+        <h2>Set or reset your password</h2>
+        <p class="muted">If your account was created and confirmed without a password, enter its email address. We'll send you a link to choose one. This also works if you've forgotten your password.</p>
+        <form id="requestResetForm">
+          <label for="resetEmail">Account email</label><input id="resetEmail" type="email" autocomplete="email" required>
+          <button id="sendReset" type="submit">Email me a password link</button>
+        </form>
+        <div class="auth-links"><button id="backToLogin" type="button">Back to sign in</button></div>
+      </div>
+      <div id="recoveryView" hidden>
+        <h2>Choose your password</h2>
+        <p class="muted">Your verification link was accepted. Choose a new password below.</p>
+        <form id="newPasswordForm">
+          <label for="newPassword">New password</label><input id="newPassword" type="password" autocomplete="new-password" minlength="8" required>
+          <label for="confirmPassword">Confirm password</label><input id="confirmPassword" type="password" autocomplete="new-password" minlength="8" required>
+          <button id="updatePassword" type="submit">Save password</button>
+        </form>
+      </div>
+      <p id="authError" class="warning" role="alert" aria-live="polite"></p>
+      <p id="authNotice" class="notice" role="status" aria-live="polite"></p>
+    </div>
     <div id="signedInPanel" class="auth-controls" hidden><span id="accountName"></span><span class="pill" id="syncState">Connecting…</span><button id="signOut" class="secondary" type="button">Sign out</button></div>
     <div id="app" hidden>
     <div class="list-panel">
