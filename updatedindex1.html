@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>MagicCon Checklist — Working Edition</title>
+    <style>
+      :root {
+        color-scheme:dark
+      }
+      * {
+        box-sizing:border-box
+      }
+      body {
+        background:#10121c;
+        color:#f1f0f7;
+        font:15px system-ui,-apple-system,sans-serif;
+        max-width:1100px;
+        margin:auto;
+        padding:18px
+      }
+      h1 {
+        font-size:clamp(25px,5vw,37px);
+        margin-bottom:4px
+      }
+      h2 {
+        margin-top:35px;
+        color:#d7b7ff
+      }
+      .muted {
+        color:#b9bdd0;
+        line-height:1.5
+      }
+      .top {
+        background:#212538;
+        border:1px solid #3a3f58;
+        border-radius:14px;
+        padding:15px;
+        position:sticky;
+        top:0;
+        z-index:5;
+        box-shadow:0 8px 24px #0007
+      }
+      .stats {
+        display:flex;
+        flex-wrap:wrap;
+        gap:15px;
+        margin-bottom:10px
+      }
+      .stats b {
+        color:#d8f7c5
+      }
+      button {
+        background:#865dc3;
+        color:white;
+        border:0;
+        border-radius:8px;
+        padding:10px 12px;
+        cursor:pointer;
+        font-weight:650
+      }
+      button.secondary {
+        background:#343b55
+      }
+      button:disabled {
+        opacity:.5
+      }
+      input[type=search],
+      select {
+        background:#20253a;
+        color:white;
+        border:1px solid #58617a;
+        padding:10px;
+        border-radius:8px;
+        width:min(100%,360px)
+      }
+      .controls {
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        align-items:center
+      }
+      .sort-control select {
+        width:auto
+      }
+      .card-table-wrap {
+        overflow-x:auto
+      }
+      .card-table-wrap table {
+        min-width:800px
+      }
+      table {
+        border-collapse:collapse;
+        width:100%
+      }
+      td,th {
+        padding:10px 6px;
+        border-bottom:1px solid #34374b;
+        text-align:left
+      }
+      th {
+        font-size:12px;
+        color:#b8bed2
+      }
+      tr.checked .name {
+        text-decoration:line-through;
+        opacity:.55
+      }
+      tr.hidden {
+        display:none
+      }
+      .name {
+        font-weight:600
+      }
+      small {
+        display:block;
+        color:#aeb4ca;
+        margin-top:3px
+      }
+      a {
+        color:#c4a9ff
+      }
+      input[type=checkbox] {
+        width:19px;
+        height:19px;
+        accent-color:#a47ae5
+      }
+      input[type=number] {
+        width:83px;
+        padding:7px;
+        border:1px solid #5c637e;
+        border-radius:7px;
+        background:#1b2031;
+        color:white
+      }
+      .sort-control {
+        display:flex;
+        align-items:center;
+        gap:6px;
+        color:#b9bdd0;
+        font-size:13px
+      }
+      .identity {
+        white-space:nowrap;
+        color:#c9cce0
+      }
+      td.price {
+        white-space:nowrap
+      }
+      td.price a {
+        font-size:11px
+      }
+      .extra {
+        padding:9px 0;
+        border-bottom:1px solid #35384b
+      }
+      .warning {
+        color:#ffd49b
+      }
+      .tag {
+        font-size:11px;
+        color:#b8bdd3
+      }
+      .section-count {
+        font-size:13px;
+        color:#aeb4c7
+      }
+      footer {
+        padding:35px 0;
+        color:#aeb4c7
+      }
+      @media(max-width:650px) {
+        body {
+          padding:10px;
+          font-size:13px
+        }
+        .top {
+          position:static
+        }
+        td,th {
+          padding:8px 3px
+        }
+        td:nth-child(2) {
+          width:30px
+        }
+        input[type=number] {
+          width:65px
+        }
+        .name {
+          font-size:12px
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🖤 MagicCon Shopping Checklist</h1>
+    <p class="muted">Import your card list from a separate JSON file. Check off purchases, record what you paid, and compare Scryfall's indicative USD prices when available.</p>
+    <div class="top">
+      <div class="stats">
+        <span>Cards: <b id="progress">0 / 0</b>
+        </span>
+        <span>Estimated remaining: <b id="remaining">Not priced yet</b>
+        </span>
+        <span>Spent: <b id="spent">$0.00</b>
+        </span>
+        <span>Prices loaded: <b id="priced">0 / 0</b>
+        </span>
+      </div>
+      <div class="controls">
+        <input id="search" type="search" placeholder="Search cards or notes">
+        <label class="sort-control">Sort cards
+          <select id="sortOrder">
+            <option value="deck">By deck</option>
+            <option value="color">By color identity</option>
+          </select>
+        </label>
+        <label class="secondary" style="cursor:pointer">Import card list
+          <input id="cardListImport" type="file" accept=".json,application/json" hidden>
+        </label>
+        <button id="load">Update cheapest prices</button>
+        <button class="secondary" id="export">Export CSV</button>
+        <button class="secondary" id="save">Save backup</button>
+        <label class="secondary" style="cursor:pointer">Restore backup <input id="restore" type="file" accept="application/json" hidden>
+        </label>
+      </div>
+      <div class="muted" id="status" role="status">Import the card-list JSON file, then update prices to load color identities.</div>
+    </div>
+    <section>
+      <h2>Card checklist <span id="cardCount" class="section-count">(0 cards)</span></h2>
+      <div class="card-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>✓</th>
+            <th>Qty</th>
+            <th>Deck</th>
+            <th>Color identity</th>
+            <th>Card / notes</th>
+            <th>Scryfall USD</th>
+            <th>Paid each</th>
+          </tr>
+        </thead>
+        <tbody id="cardRows">
+          <tr><td colspan="7" class="muted">Import a card-list JSON file to get started.</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </section>
+    <section>
+      <h2>Other MagicCon shopping</h2>
+      <h3>Deck boxes</h3>
+      <div class="extra" data-extra="Deck boxes-0">
+        <label>
+          <input type="checkbox" class="extra-check"> Mana Moon deck box</label>
+      </div>
+      <div class="extra" data-extra="Deck boxes-1">
+        <label>
+          <input type="checkbox" class="extra-check"> Gatherer’s Tavern: yellow Scapegoat ARY bag</label>
+      </div>
+      <div class="extra" data-extra="Deck boxes-2">
+        <label>
+          <input type="checkbox" class="extra-check"> Gatherer’s Tavern: pink Kuribee ARY bag</label>
+      </div>
+      <h3>Dice</h3>
+      <div class="extra" data-extra="Dice-0">
+        <label>
+          <input type="checkbox" class="extra-check"> Foam Brain Games booth 7089: Gelly cube dice bag</label>
+      </div>
+      <div class="extra" data-extra="Dice-1">
+        <label>
+          <input type="checkbox" class="extra-check"> RPG hamburger dice set</label>
+      </div>
+      <div class="extra" data-extra="Dice-2">
+        <label>
+          <input type="checkbox" class="extra-check"> Stegosaurus RPG dice set</label>
+      </div>
+      <div class="extra" data-extra="Dice-3">
+        <label>
+          <input type="checkbox" class="extra-check"> Enchanting Unicorn RPG dice set</label>
+      </div>
+      <div class="extra" data-extra="Dice-4">
+        <label>
+          <input type="checkbox" class="extra-check"> Mystery Loot: Epic Mystery Loot</label>
+      </div>
+      <div class="extra" data-extra="Dice-5">
+        <label>
+          <input type="checkbox" class="extra-check"> Elephant RPG dice set</label>
+      </div>
+      <h3>Playmats</h3>
+      <div class="extra" data-extra="Playmats-0">
+        <label>
+          <input type="checkbox" class="extra-check"> Exclusive Gamegenic Shiny Playmat</label>
+      </div>
+      <div class="extra" data-extra="Playmats-1">
+        <label>
+          <input type="checkbox" class="extra-check"> Atlanta playmat</label>
+      </div>
+      <div class="extra" data-extra="Playmats-2">
+        <label>
+          <input type="checkbox" class="extra-check"> Cutesy pink playmat</label>
+      </div>
+      <div class="extra" data-extra="Playmats-3">
+        <label>
+          <input type="checkbox" class="extra-check"> Nerdgear: Pre-game Ramyeon premium TCG playmat</label>
+      </div>
+      <h3>Other</h3>
+      <div class="extra" data-extra="Other-0">
+        <label>
+          <input type="checkbox" class="extra-check"> Gamegenic double life counter</label>
+      </div>
+      <div class="extra" data-extra="Other-1">
+        <label>
+          <input type="checkbox" class="extra-check"> Elas tokens: Mysterious Creature, Cat, City’s Blessing, Copy, Gnome, Human, Human Soldier, Orc Army, Shapeshifter, Snake, Soldier</label>
+      </div>
+      <div class="extra" data-extra="Other-2">
+        <label>
+          <input type="checkbox" class="extra-check"> Aminatou tokens: Bird, Pegasus, Copy, Shark, Treasure</label>
+      </div>
+      <div class="extra" data-extra="Other-3">
+        <label>
+          <input type="checkbox" class="extra-check"> MagicCon Atlanta shirt: women’s L or unisex M</label>
+      </div>
+    </section>
+    <footer>Card-list JSON fields: deck, qty, name, note, and colorIdentity. Use color codes W, U, B, R, G in an array; leave colorIdentity null to load it from Scryfall with prices. Prices are the lowest Scryfall paper USD prices found for each card; they are indicative market prices, not verified active seller listings. Prices may be unavailable when the browser blocks API requests. Shipping, condition and availability are not included. The CSV includes all cards even if live prices fail.</footer>
+<script>
+let cards = [];
+let rows = [];
+const prices = {};
+const stateKey = 'magiccon-fixed-v2';
+const cardListKey = 'magiccon-card-list-v1';
+let state = {};
+
+try {
+  state = JSON.parse(localStorage.getItem(stateKey) || '{}') || {};
+} catch (error) {
+  state = {};
+}
+
+const $ = id => document.getElementById(id);
+const money = amount => '$' + Number(amount).toFixed(2);
+const colors = {
+  W: 'White',
+  U: 'Blue',
+  B: 'Black',
+  R: 'Red',
+  G: 'Green'
+};
+const colorOrder = ['W', 'U', 'B', 'R', 'G'];
+
+function normalizeCards(input) {
+  const list = Array.isArray(input) ? input : input?.cards;
+  if (!Array.isArray(list) || !list.length) {
+    throw new Error('The JSON file must contain a non-empty card list.');
+  }
+
+  return list.map((entry, index) => {
+    if (!entry || !String(entry.name || '').trim()) {
+      throw new Error('Every card needs a name (problem at item ' + (index + 1) + ').');
+    }
+
+    const identity = entry.colorIdentity ?? entry.color_identity;
+    let colorIdentity = null;
+    if (Array.isArray(identity)) {
+      colorIdentity = colorOrder.filter(color => identity.map(value => String(value).toUpperCase()).includes(color));
+    } else if (typeof identity === 'string' && /^[WUBRG,\s]+$/i.test(identity)) {
+      const codes = identity.toUpperCase().match(/[WUBRG]/g) || [];
+      colorIdentity = colorOrder.filter(color => codes.includes(color));
+    }
+
+    return {
+      deck: String(entry.deck || 'Unassigned').trim(),
+      qty: Math.max(1, Number.parseInt(entry.qty, 10) || 1),
+      name: String(entry.name).trim(),
+      note: String(entry.note || ''),
+      colorIdentity
+    };
+  });
+}
+
+function cardKey(card) {
+  return 'card:' + card.deck.toLocaleLowerCase() + '::' + card.name.toLocaleLowerCase();
+}
+
+function savedFor(index) {
+  const card = cards[index];
+  return state[cardKey(card)] || state['c' + index] || {};
+}
+
+function saveCardState(index, changes) {
+  const key = cardKey(cards[index]);
+  state[key] = { ...savedFor(index), ...changes };
+  delete state['c' + index];
+}
+
+function migrateLegacyState() {
+  cards.forEach((card, index) => {
+    const oldKey = 'c' + index;
+    const newKey = cardKey(card);
+    if (state[oldKey] && !state[newKey]) state[newKey] = state[oldKey];
+    delete state[oldKey];
+  });
+}
+
+function persist() {
+  try {
+    localStorage.setItem(stateKey, JSON.stringify(state));
+  } catch (error) {
+    $('status').textContent = 'Browser storage unavailable; use Save backup to keep your checks.';
+  }
+}
+
+function persistCardList() {
+  try {
+    localStorage.setItem(cardListKey, JSON.stringify(cards));
+  } catch (error) {
+    $('status').textContent = 'Card list storage is unavailable; import the JSON file again next time.';
+  }
+}
+
+function colorCodes(card) {
+  return Array.isArray(card.colorIdentity) ? card.colorIdentity : null;
+}
+
+function colorLabel(card) {
+  const identity = colorCodes(card);
+  if (identity === null) return 'Unknown';
+  if (!identity.length) return 'Colorless';
+  return identity.map(color => colors[color]).join(' / ');
+}
+
+function colorSortKey(card) {
+  const identity = colorCodes(card);
+  if (identity === null) return '9-unknown';
+  if (!identity.length) return '0-colorless';
+  if (identity.length === 1) return '1-' + colorOrder.indexOf(identity[0]) + '-' + identity[0];
+  return '2-' + identity.join('');
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[character]);
+}
+
+function sortedIndexes() {
+  const indexes = cards.map((_, index) => index);
+  const mode = $('sortOrder').value;
+
+  indexes.sort((left, right) => {
+    const a = cards[left];
+    const b = cards[right];
+    if (mode === 'color') {
+      const byColor = colorSortKey(a).localeCompare(colorSortKey(b));
+      if (byColor) return byColor;
+    }
+    const byDeck = a.deck.localeCompare(b.deck);
+    return byDeck || a.name.localeCompare(b.name);
+  });
+
+  return indexes;
+}
+
+function renderCards() {
+  const body = $('cardRows');
+
+  if (!cards.length) {
+    body.innerHTML = '<tr><td colspan="7" class="muted">Import a card-list JSON file to get started.</td></tr>';
+    rows = [];
+    $('cardCount').textContent = '(0 cards)';
+    $('progress').textContent = '0 / 0';
+    $('priced').textContent = '0 / 0';
+    return;
+  }
+
+  body.innerHTML = sortedIndexes().map(index => {
+    const card = cards[index];
+    const searchText = (card.name + ' ' + card.note + ' ' + card.deck).toLowerCase();
+    const query = encodeURIComponent('!"' + card.name + '"');
+    const cardUrl = 'https://scryfall.com/search?q=' + query;
+    const note = card.note ? '<small>' + escapeHtml(card.note) + '</small>' : '';
+
+    return '<tr data-i="' + index + '" data-search="' + escapeHtml(searchText) + '">' +
+      '<td><input class="check" type="checkbox" aria-label="' + escapeHtml('Bought ' + card.name) + '"></td>' +
+      '<td>' + card.qty + '</td>' +
+      '<td>' + escapeHtml(card.deck) + '</td>' +
+      '<td class="identity">' + escapeHtml(colorLabel(card)) + '</td>' +
+      '<td><a class="name" href="' + escapeHtml(cardUrl) + '" target="_blank" rel="noopener">' +
+      escapeHtml(card.name) + '</a>' + note + '</td>' +
+      '<td class="price"><span class="estimate">—</span><small><a href="' + escapeHtml(cardUrl) +
+      '" target="_blank" rel="noopener">View printings</a></small></td>' +
+      '<td><input class="paid" type="number" min="0" step="0.01" placeholder="—" aria-label="Paid per copy"></td>' +
+      '</tr>';
+  }).join('');
+
+  rows = [];
+  body.querySelectorAll('tr[data-i]').forEach(row => {
+    rows[Number(row.dataset.i)] = row;
+    const index = Number(row.dataset.i);
+
+    row.querySelector('.check').addEventListener('change', event => {
+      saveCardState(index, { checked: event.target.checked });
+      row.classList.toggle('checked', event.target.checked);
+      persist();
+      totals();
+    });
+
+    row.querySelector('.paid').addEventListener('input', event => {
+      saveCardState(index, { paid: event.target.value });
+      persist();
+      totals();
+    });
+  });
+
+  $('cardCount').textContent = '(' + cards.length + ' cards)';
+  apply();
+}
+
+function apply() {
+  rows.forEach((row, index) => {
+    if (!row) return;
+    const saved = savedFor(index);
+    row.querySelector('.check').checked = !!saved.checked;
+    row.classList.toggle('checked', !!saved.checked);
+    row.querySelector('.paid').value = saved.paid ?? '';
+
+    if (saved.price != null) {
+      prices[index] = Number(saved.price);
+      row.querySelector('.estimate').textContent = money(saved.price);
+    }
+  });
+
+  document.querySelectorAll('[data-extra]').forEach(row => {
+    row.querySelector('input').checked = !!state[row.dataset.extra]?.checked;
+  });
+
+  totals();
+}
+
+function totals() {
+  let checked = 0;
+  let spent = 0;
+  let remaining = 0;
+  let loaded = 0;
+
+  rows.forEach((row, index) => {
+    if (!row) return;
+    const saved = savedFor(index);
+    if (saved.checked) checked++;
+    if (saved.checked && saved.paid !== '' && saved.paid != null) {
+      spent += cards[index].qty * Number(saved.paid);
+    }
+    if (prices[index] != null) {
+      loaded++;
+      if (!saved.checked) remaining += cards[index].qty * prices[index];
+    }
+  });
+
+  $('progress').textContent = checked + ' / ' + cards.length;
+  $('spent').textContent = money(spent);
+  $('priced').textContent = loaded + ' / ' + cards.length;
+  $('remaining').textContent = loaded ? money(remaining) + ' (priced only)' : 'Not priced yet';
+}
+
+function setCardList(input) {
+  Object.keys(prices).forEach(index => delete prices[index]);
+  cards = normalizeCards(input);
+  migrateLegacyState();
+  persist();
+  persistCardList();
+  renderCards();
+  $('status').textContent = 'Loaded ' + cards.length + ' cards. Sort by deck or color identity.';
+}
+
+function loadSavedCards() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(cardListKey) || 'null');
+    if (stored) {
+      cards = normalizeCards(stored);
+      migrateLegacyState();
+      renderCards();
+      $('status').textContent = 'Loaded saved card list. Import the JSON file again after editing it.';
+      return;
+    }
+  } catch (error) {
+    localStorage.removeItem(cardListKey);
+  }
+
+  renderCards();
+  $('status').textContent = 'Import the bundled card-list JSON file to get started.';
+}
+
+$('cardListImport').addEventListener('change', async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    setCardList(JSON.parse(await file.text()));
+  } catch (error) {
+    $('status').textContent = 'Could not import card list: ' + error.message;
+  }
+  event.target.value = '';
+});
+
+$('sortOrder').addEventListener('change', () => {
+  renderCards();
+});
+
+$('search').addEventListener('input', event => {
+  const query = event.target.value.toLowerCase().trim();
+  rows.forEach(row => {
+    if (row) row.classList.toggle('hidden', !row.dataset.search.includes(query));
+  });
+});
+
+function download(name, contents, type) {
+  const anchor = document.createElement('a');
+  const blob = new Blob([contents], { type });
+  anchor.href = URL.createObjectURL(blob);
+  anchor.download = name;
+  document.body.append(anchor);
+  anchor.click();
+
+  setTimeout(() => {
+    URL.revokeObjectURL(anchor.href);
+    anchor.remove();
+  }, 1000);
+}
+
+$('save').onclick = () => {
+  download('MagicCon-checklist-backup.json', JSON.stringify({ version: 2, cards, state }, null, 2), 'application/json');
+};
+
+$('restore').onchange = async event => {
+  try {
+    const backup = JSON.parse(await event.target.files[0].text());
+    if (Array.isArray(backup.cards) && backup.state) {
+      state = backup.state;
+      Object.keys(prices).forEach(index => delete prices[index]);
+      cards = normalizeCards(backup.cards);
+      migrateLegacyState();
+      persist();
+      persistCardList();
+      renderCards();
+    } else {
+      state = backup;
+      persist();
+      apply();
+    }
+    $('status').textContent = 'Backup restored.';
+  } catch (error) {
+    $('status').textContent = 'Could not read backup: ' + error.message;
+  }
+};
+
+$('export').onclick = () => {
+  const escapeCsv = value => '"' + String(value ?? '').replace(/"/g, '""') + '"';
+  const data = [[
+    'Deck',
+    'Color identity',
+    'Qty',
+    'Card',
+    'Notes',
+    'Bought',
+    'Scryfall estimate USD each',
+    'Paid USD each'
+  ]];
+
+  cards.forEach((card, index) => {
+    const saved = savedFor(index);
+    data.push([
+      card.deck,
+      colorLabel(card),
+      card.qty,
+      card.name,
+      card.note,
+      !!saved.checked,
+      prices[index] ?? saved.price ?? '',
+      saved.paid ?? ''
+    ]);
+  });
+
+  download(
+    'MagicCon-checklist.csv',
+    data.map(row => row.map(escapeCsv).join(',')).join('\r\n'),
+    'text/csv'
+  );
+};
+
+const PRICE_CACHE_TTL = 24 * 60 * 60 * 1000;
+const PRICE_BATCH_SIZE = 12;
+const PRICE_REQUEST_GAP = 500;
+
+async function loadPrices() {
+  const button = $('load');
+  if (!cards.length) {
+    $('status').textContent = 'Import a card-list JSON file before loading prices.';
+    return;
+  }
+
+  button.disabled = true;
+  let priced = 0;
+  let unavailable = 0;
+  let rateLimited = false;
+  const staleOrMissing = [];
+
+  cards.forEach((card, index) => {
+    const saved = savedFor(index);
+    const hasIdentity = Array.isArray(card.colorIdentity);
+    const fresh = prices[index] != null &&
+      saved.priceFetchedAt &&
+      Date.now() - saved.priceFetchedAt < PRICE_CACHE_TTL &&
+      hasIdentity;
+
+    if (fresh) priced++;
+    else staleOrMissing.push(index);
+  });
+
+  const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+  const batches = [];
+  for (let offset = 0; offset < staleOrMissing.length; offset += PRICE_BATCH_SIZE) {
+    batches.push(staleOrMissing.slice(offset, offset + PRICE_BATCH_SIZE));
+  }
+
+  let requests = 0;
+  for (let batchIndex = 0; batchIndex < batches.length && !rateLimited; batchIndex++) {
+    const indexes = batches[batchIndex];
+    const byName = new Map();
+
+    for (const index of indexes) {
+      const name = cards[index].name;
+      if (!byName.has(name)) byName.set(name, []);
+      byName.get(name).push(index);
+    }
+
+    const names = [...byName.keys()];
+    const escapeName = name => name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const query = '(' + names.map(name => '!"' + escapeName(name) + '"').join(' OR ') + ') game:paper';
+    let url = 'https://api.scryfall.com/cards/search?q=' +
+      encodeURIComponent(query) + '&unique=prints&order=usd&dir=asc';
+    const found = new Set();
+
+    $('status').textContent = 'Finding cheapest paper printings: batch ' +
+      (batchIndex + 1) + '/' + batches.length +
+      ' (' + priced + ' priced, ' + unavailable + ' unavailable)';
+
+    try {
+      while (url && found.size < names.length) {
+        if (requests > 0) await wait(PRICE_REQUEST_GAP);
+        requests++;
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 30000);
+        let response;
+        try {
+          response = await fetch(url, {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal
+          });
+        } finally {
+          clearTimeout(timer);
+        }
+
+        if (response.status === 429) {
+          rateLimited = true;
+          break;
+        }
+        if (!response.ok) throw Error('HTTP ' + response.status);
+
+        const result = await response.json();
+        for (const print of result.data || []) {
+          const matches = byName.get(print.name);
+          if (!matches) continue;
+
+          if (Array.isArray(print.color_identity)) {
+            const identity = colorOrder.filter(color => print.color_identity.includes(color));
+            for (const index of matches) cards[index].colorIdentity = identity;
+          }
+
+          const amount = Number(print.prices?.usd);
+          if (found.has(print.name) || !Number.isFinite(amount) || amount <= 0) continue;
+          found.add(print.name);
+
+          for (const index of matches) {
+            if (prices[index] == null) priced++;
+            prices[index] = amount;
+            saveCardState(index, { price: amount, priceFetchedAt: Date.now() });
+            if (rows[index]) rows[index].querySelector('.estimate').textContent = money(amount);
+          }
+        }
+
+        url = result.has_more ? result.next_page : null;
+      }
+
+      for (const name of names) {
+        if (!found.has(name)) {
+          for (const index of byName.get(name)) {
+            if (prices[index] == null && rows[index]) {
+              rows[index].querySelector('.estimate').textContent = 'No price';
+            }
+            unavailable++;
+          }
+        }
+      }
+    } catch (error) {
+      for (const index of indexes) {
+        if (prices[index] == null && rows[index]) {
+          rows[index].querySelector('.estimate').textContent = 'Unavailable';
+        }
+        unavailable++;
+      }
+    }
+
+    persist();
+    persistCardList();
+    renderCards();
+  }
+
+  button.disabled = false;
+  totals();
+
+  if (rateLimited) {
+    $('status').textContent = 'Scryfall rate-limited this load. ' + priced +
+      ' prices are available; wait before trying again. Cached prices remain saved.';
+  } else {
+    $('status').textContent = 'Pricing finished: ' + priced + ' priced; ' +
+      unavailable + ' unavailable. The lowest Scryfall paper USD prices and color identities are cached.';
+  }
+}
+
+$('load').addEventListener('click', loadPrices);
+document.querySelectorAll('[data-extra]').forEach(row => {
+  row.querySelector('input').addEventListener('change', event => {
+    state[row.dataset.extra] = { checked: event.target.checked };
+    persist();
+  });
+});
+loadSavedCards();
+</script>
+
+</body>
+</html>
