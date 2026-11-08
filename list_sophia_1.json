@@ -86,7 +86,7 @@
   {
     "deck": "Elas",
     "qty": 1,
-    "name": "Boggart Trawler",
+    "name": "Boggart Trawler // Boggart Bog",
     "note": "",
     "colorIdentity": null
   },
@@ -100,7 +100,7 @@
   {
     "deck": "Elas",
     "qty": 1,
-    "name": "Brightclimb Pathway",
+    "name": "Brightclimb Pathway // Grimclimb Pathway",
     "note": "",
     "colorIdentity": null
   },
@@ -261,7 +261,7 @@
   {
     "deck": "Elas",
     "qty": 1,
-    "name": "Fell the Profane",
+    "name": "Fell the Profane // Fell Mire",
     "note": "",
     "colorIdentity": null
   },
@@ -359,7 +359,7 @@
   {
     "deck": "Elas",
     "qty": 1,
-    "name": "Merciless Poisoning",
+    "name": "Toxic Deluge",
     "note": "",
     "colorIdentity": null
   },
@@ -387,7 +387,7 @@
   {
     "deck": "Elas",
     "qty": 1,
-    "name": "Ojer Taq, Deepest Foundation",
+    "name": "Ojer Taq, Deepest Foundation // Temple of Civilization",
     "note": "",
     "colorIdentity": null
   },
@@ -625,7 +625,7 @@
   {
     "deck": "Elas",
     "qty": 1,
-    "name": "Witch Enchanter",
+    "name": "Witch Enchanter // Witch-Blessed Meadow",
     "note": "",
     "colorIdentity": null
   },
@@ -681,8 +681,8 @@
   {
     "deck": "Aminatou",
     "qty": 1,
-    "name": "Snowman Starfield",
-    "note": "",
+    "name": "Starfield of Nyx",
+    "note": "Snowman Starfield SLD",
     "colorIdentity": null
   },
   {
