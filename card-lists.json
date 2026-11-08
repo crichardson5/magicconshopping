@@ -2,7 +2,11 @@
   "lists": [
     {
       "name": "Sophia's MagicCon List",
-      "file": "list_sophia_1.json"
+      "file": "json/list_sophia_1.json"
+    },
+    {
+      "name": "Caleb's MagicCon List",
+      "file": "json/list_caleb_1.json"
     }
   ]
 }

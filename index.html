@@ -208,8 +208,7 @@
     </style>
   </head>
   <body>
-    <h1>🖤 MagicCon Shopping Checklist</h1>
-    <p class="muted">Shared shopping lists with live progress. Import JSON to create a list everyone can see.</p>
+    <h1>Magic the Gathering Shopping Checklist</h1>
     <div id="authPanel" class="auth-panel">
       <div id="loginView">
         <h2>Sign in to shared shopping</h2>
@@ -247,13 +246,13 @@
     <div class="list-panel">
       <h2 style="margin-top:0">Shared lists</h2>
       <div class="controls"><select id="activeList" aria-label="Select shared list"><option>Loading lists…</option></select><button id="createFromJson" type="button">Upload JSON as new shared list</button><input id="newListFile" type="file" accept=".json,application/json" hidden></div>
-      <div class="list-actions"><button id="removeList" type="button" class="danger" hidden>Delete selected list</button><span class="list-note">Everyone sees every shared list and its checkmarks. Uploading creates a new list; it never replaces an existing one.</span></div>
+      <div class="list-actions"><button id="removeList" type="button" class="danger" hidden>Delete selected list</button><span class="list-note">Everyone sees every shared list and items marked off sync for all users. Uploading creates a new list; it never replaces an existing one.</span></div>
     </div>
     <div class="top">
       <div class="stats">
-        <span>Items: <b id="progress">0 / 0</b>
+        <span>Cards Acquired: <b id="progress">0 / 0</b>
         </span>
-        <span>Estimated remaining: <b id="remaining">Not priced yet</b>
+        <span>Estimated cost remaining: <b id="remaining">Not priced yet</b>
         </span>
         <span>Prices loaded: <b id="priced">0 / 0</b>
         </span>
