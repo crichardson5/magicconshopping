@@ -3,10 +3,22 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>MTG Shopping Tracker</title>
+    
+    <title>Wishclaw</title>
+   
     <link rel="icon" type="image/x-icon" href="/app/favicon.ico">
     <link rel="apple-touch-icon" href="/app/apple-touch-icon.png">
     <meta name="apple-mobile-web-app-title" content="MTG Shopping Tracker">
+    
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    >
+
     <style>
       :root {
         color-scheme:dark
@@ -52,7 +64,7 @@
       }
       .stats b {
         color:#d8f7c5
-      }
+      }     
       button {
         background:#865dc3;
         color:white;
@@ -213,10 +225,128 @@
         .management-group .controls > *{flex:1 1 100%}
         .management-group .controls select{width:100%}
       }
+
+
+      /* ========================================
+        WISHCLAW - WEBSITE HEADER
+        ======================================== */
+
+      .site-header {
+        text-align: center;
+        padding: 36px 16px 42px;
+        position: relative;
+      }
+
+      .header-eyebrow {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 4px;
+        text-transform: uppercase;
+        color: #ba9ada;
+        margin-bottom: 8px;
+      }
+
+      .site-title {
+        font-family: "Cinzel", Georgia, serif;
+        font-size: clamp(42px, 9vw, 88px);
+        font-weight: 800;
+        line-height: 1.15;
+        letter-spacing: -3px;
+        margin: 0;
+
+        /* Metallic lavender text */
+        background: linear-gradient(
+          135deg,
+          #ffffff 0%,
+          #e3c8ff 40%,
+          #a96de8 75%,
+          #ffffff 100%
+        );
+
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+
+        filter: drop-shadow(
+          0 0 18px rgba(169, 109, 232, 0.28)
+        );
+      }
+
+      .header-divider {
+        position: relative;
+        width: min(320px, 75%);
+        height: 2px;
+        margin: 20px auto;
+
+        background: linear-gradient(
+          90deg,
+          transparent,
+          #a96de8,
+          transparent
+        );
+      }
+
+      .divider-star {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+
+        background: #10121c;
+        color: #e3c8ff;
+        padding: 0 12px;
+        font-size: 24px;
+
+        text-shadow: 0 0 12px #a96de8;
+      }
+
+      .header-subtitle {
+        color: #b9bdd0;
+        font-size: 14px;
+        font-weight: 400;
+        letter-spacing: 2px;
+        margin-top: 24px;
+      }
+
+      /* Mobile adjustments */
+      @media (max-width: 650px) {
+        .site-header {
+          padding: 24px 8px 30px;
+        }
+
+        .header-eyebrow {
+          font-size: 9px;
+          letter-spacing: 2px;
+        }
+
+        .site-title {
+          letter-spacing: -1px;
+        }
+
+        .header-subtitle {
+          font-size: 12px;
+          letter-spacing: 1px;
+        }
+      }
+
     </style>
   </head>
   <body>
-    <h1>MTG Shopping Checklist</h1>
+    <header class="site-header">
+      <p class="header-eyebrow">
+        EVERY WISH HAS A PRICE
+      </p>
+
+      <h1 class="site-title">Wishclaw</h1>
+
+      <div class="header-divider" aria-hidden="true">
+        <span class="divider-star">✦</span>
+      </div>
+
+      <p class="header-subtitle">
+        Find it. Want it. Own it.
+      </p>
+    </header>
     <div id="authPanel" class="auth-panel">
       <div id="loginView">
         <h2>Sign in to shared shopping</h2>
