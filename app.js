@@ -206,11 +206,34 @@ function acquisition(item) {
 
 async function loadProfiles() {
   const epoch = generation;
-  const { data, error } = await supabase.from('wishclaw_profiles').select('user_id,display_name');
-  if (error) throw error;
-  if (epoch !== generation) return;
-  profiles = new Map((data || []).map(profile => [profile.user_id, profile.display_name]));
-  $('displayName').value = profiles.get(user?.id) || '';
+
+  const { data, error } = await supabase
+    .from('wishclaw_profiles')
+    .select('user_id,display_name');
+
+  if (error) {
+    throw error;
+  }
+
+  if (epoch !== generation) {
+    return;
+  }
+
+  profiles = new Map(
+    (data || []).map(profile => [
+      profile.user_id,
+      profile.display_name
+    ])
+  );
+
+  const currentDisplayName = profiles.get(user?.id) || '';
+
+  $('displayName').value = currentDisplayName;
+
+  // Only show setup for users without a display name.
+  $('displayNameSetup').hidden =
+    currentDisplayName.trim().length > 0;
+
   render();
 }
 
@@ -276,6 +299,7 @@ async function handleSession(session) {
   user = next;
   approved = false;
   profiles.clear();
+  $('displayNameSetup').hidden = true;
   listTools.close();
   if (channel) {
     supabase.removeChannel(channel);
@@ -490,6 +514,7 @@ $('profileForm').onsubmit = async event => {
     const profile = await repository.saveProfile(user.id, $('displayName').value);
     if (epoch !== generation) return;
     profiles.set(profile.user_id, profile.display_name);
+    $('displayNameSetup').hidden = true;
     $('profileStatus').textContent = 'Display name saved.';
     render();
   } catch (error) { $('profileStatus').textContent = 'Could not save display name: ' + error.message; }

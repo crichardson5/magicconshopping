@@ -8,7 +8,7 @@
    
     <link rel="icon" type="image/x-icon" href="/app/favicon.ico">
     <link rel="apple-touch-icon" href="/app/apple-touch-icon.png">
-    <meta name="apple-mobile-web-app-title" content="MTG Shopping Tracker">
+    <meta name="apple-mobile-web-app-title" content="Wishclaw">
     
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -70,6 +70,45 @@
       <p id="authNotice" class="notice" role="status" aria-live="polite"></p>
     </div>
     <div id="app" hidden>
+      <section
+        id="displayNameSetup"
+        class="list-panel"
+        hidden
+      >
+        <h2 style="margin-top: 0">
+          Welcome to Wishclaw!
+        </h2>
+
+        <p class="muted">
+          Choose a display name so other shoppers
+          know who acquired each card.
+        </p>
+
+        <form id="profileForm" class="controls">
+          <label for="displayName">
+            Display name
+          </label>
+
+          <input
+            id="displayName"
+            type="text"
+            maxlength="60"
+            required
+            placeholder="Your name"
+            autocomplete="nickname"
+          >
+
+          <button id="saveProfile" type="submit">
+            Save display name
+          </button>
+        </form>
+
+        <p
+          id="profileStatus"
+          role="status"
+          aria-live="polite"
+        ></p>
+      </section>
     <div class="list-panel">
       <h2 style="margin-top:0">Shared lists</h2>
       <div class="controls"><button id="createList" type="button">+ Create List</button><select id="activeList" aria-label="Select shared list"><option>Loading lists…</option></select></div>
@@ -89,7 +128,7 @@
         <label class="sort-control">Sort cards
           <select id="sortOrder">
             <option value="deck">By deck</option>
-            <option value="color">By color identity, then deck</option>
+            <option value="color" selected>By color identity, then deck</option>
             <option value="deck-color">By deck, then color identity</option>
           </select>
         </label>
@@ -123,15 +162,6 @@
     <section id="otherSection" hidden><h2>Other shopping items</h2><div id="extraRows"></div></section>
     <section class="list-panel" id="listManagement" aria-labelledby="listManagementHeading">
       <h2 id="listManagementHeading" style="margin-top:0">List Management</h2>
-      <div class="management-group">
-        <h3>Your display name</h3>
-        <form id="profileForm" class="controls">
-          <label for="displayName">Shown beside cards you acquire</label>
-          <input id="displayName" type="text" maxlength="60" required placeholder="Your name" autocomplete="nickname">
-          <button id="saveProfile" type="submit">Save display name</button>
-        </form>
-        <p id="profileStatus" role="status" aria-live="polite"></p>
-      </div>
 
       <div class="management-group">
         <h3>Add a hosted list</h3>
