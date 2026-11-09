@@ -611,78 +611,262 @@ $('export').onclick = () => {
 };
 
 // Scryfall pricing
-const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+const SCRYFALL_BATCH_SIZE = 8;
+const SCRYFALL_REQUEST_DELAY = 700;
+
+const wait = ms =>
+  new Promise(resolve => setTimeout(resolve, ms));
+
+function batchItems(array, size) {
+  const batches = [];
+
+  for (let i = 0; i < array.length; i += size) {
+    batches.push(array.slice(i, i + size));
+  }
+
+  return batches;
+}
+
+
 async function loadPrices() {
   if (syncing) return;
+
   syncing = true;
   $('load').disabled = true;
-  const cards = items.filter(x => x.item_type === 'card');
-  let found = 0,
-    fail = 0;
-  try {
-    for (const c of cards) {
-      if (activeId !== c.list_id) break;
-      if (c.estimated_price != null && Array.isArray(c.color_identity)) {
-        found++;
-        continue;
-      }
-      message(`Checking Scryfall: ${found+fail+1}/${cards.length} (${found} priced)`);
-      const note = (c.notes || '').toLowerCase(),
-        foil = note.includes('foil'),
-        etched = note.includes('etched');
-      let query = '!"' + c.item_name.replace(/"/g, '\\"') + '" game:paper';
-      if (etched) query += ' finish:etched';
-      else if (foil) query += ' finish:foil';
-      if (note.includes('secret lair')) query += ' set:sld';
-      let url = 'https://api.scryfall.com/cards/search?q=' + encodeURIComponent(query) +
-        '&unique=prints&order=usd&dir=asc';
-      let min = Infinity,
-        identity = null;
-      try {
-        let pages = 0;
-        while (url && pages++ < 10) {
-          const response = await fetch(url, {
-            headers: {
-              Accept: 'application/json'
-            }
-          });
-          if (!response.ok) throw Error('HTTP ' + response.status);
-          const result = await response.json();
-          for (const card of result.data || []) {
-            if (!identity && Array.isArray(card.color_identity)) identity = colorOrder.filter(x =>
-              card.color_identity.includes(x));
-            const num = Number(card.prices?.[etched ? 'usd_etched' : foil ? 'usd_foil' : 'usd']);
-            if (num > 0 && num < min) min = num;
-          }
-          url = result.has_more ? result.next_page : null;
-          await wait(150);
-        }
-      } catch (e) {
-        fail++;
-        continue;
-      }
-      const changes = {};
-      if (Number.isFinite(min)) changes.estimated_price = min;
-      if (identity !== null) changes.color_identity = identity;
-      if (Object.keys(changes).length) {
-        const {
-          data,
-          error
-        } = await supabase.from('shopping_list_items').update(changes).eq('id', c.id).select()
-          .single();
-        if (!error && data) {
-          const i = items.findIndex(x => x.id === c.id);
-          if (i >= 0) items[i] = data;
-          if (Number.isFinite(min)) found++;
-          else fail++;
-        } else fail++;
-      } else fail++;
-      render();
-      await wait(150);
+
+  const listId = activeId;
+  const cards = items.filter(item =>
+    item.item_type === 'card' &&
+    (
+      item.estimated_price == null ||
+      !Array.isArray(item.color_identity)
+    )
+  );
+
+  // Group by printing preference to preserve foil,
+  // etched, and Secret Lair restrictions.
+  const groups = new Map();
+
+  for (const card of cards) {
+    const notes = (card.notes || '').toLowerCase();
+
+
+    const finish = notes.includes('confetti')
+      ? 'confetti'
+      : notes.includes('etched')
+        ? 'etched'
+        : notes.includes('foil')
+          ? 'foil'
+          : 'nonfoil';
+
+
+    const secretLair = notes.includes('secret lair');
+    const secretLair = notes.includes('SLD');
+    
+    const groupKey = `${finish}:${secretLair}`;
+
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, {
+        finish,
+        secretLair,
+        cards: []
+      });
     }
-    message(
-      `Pricing finished: ${found} priced; ${fail} unavailable. Estimates are Scryfall indicative USD prices, not live TCGplayer listings.`
+
+    groups.get(groupKey).cards.push(card);
+  }
+
+  const batches = [];
+
+  for (const group of groups.values()) {
+    // Deduplicate names within each preference group.
+    const names = [...new Set(
+      group.cards.map(card => card.item_name)
+    )];
+
+    for (const batch of batchItems(names, SCRYFALL_BATCH_SIZE)) {
+      batches.push({ ...group, names: batch });
+    }
+  }
+
+  let updated = 0;
+  let unavailable = 0;
+  let requests = 0;
+  let rateLimited = false;
+
+  try {
+    for (let i = 0; i < batches.length; i++) {
+      if (activeId !== listId) break;
+
+      const batch = batches[i];
+      const escapeName = name =>
+        name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+      const query =
+        '(' +
+        batch.names.map(name => `!"${escapeName(name)}"`).join(' OR ') +
+        ') game:paper' +
+        (batch.secretLair ? ' set:sld' : '') +
+        (batch.finish === 'foil' ? ' finish:foil' : '') +
+        (batch.finish === 'confetti' ? ' is:confetti' : '') +
+        (batch.finish === 'etched' ? ' finish:etched' : '');
+
+      let url = 'https://api.scryfall.com/cards/search?' +
+        new URLSearchParams({
+          q: query,
+          unique: 'prints',
+          order: 'usd',
+          dir: 'asc'
+        });
+
+      const results = new Map();
+
+      message(
+        `Checking Scryfall batch ${i + 1}/${batches.length}...`
       );
+
+      // Follow every page to avoid missing lower prices
+      // for foil or etched printings.
+      while (url) {
+        if (requests > 0) {
+          await wait(SCRYFALL_REQUEST_DELAY);
+        }
+
+        requests++;
+
+        const response = await fetch(url, {
+          headers: {
+            Accept: 'application/json'
+          }
+        });
+
+        if (response.status === 429) {
+          rateLimited = true;
+          break;
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            `Scryfall returned HTTP ${response.status}`
+          );
+        }
+
+        const data = await response.json();
+
+        for (const printing of data.data || []) {
+          const name = printing.name;
+
+          if (!batch.names.includes(name)) continue;
+
+          const priceField = {
+            nonfoil: 'usd',
+            foil: 'usd_foil',
+            etched: 'usd_etched'
+          }[batch.finish];
+
+          const rawPrice = printing.prices?.[priceField];
+
+          const price = rawPrice == null
+            ? null
+            : Number(rawPrice);
+
+          const current = results.get(name) || {
+            price: null,
+            colorIdentity: null
+          };
+
+          if (
+            price != null &&
+            Number.isFinite(price) &&
+            price > 0 &&
+            (current.price == null || price < current.price)
+          ) {
+            current.price = price;
+          }
+
+          if (Array.isArray(printing.color_identity)) {
+            current.colorIdentity = colorOrder.filter(color =>
+              printing.color_identity.includes(color)
+            );
+          }
+
+          results.set(name, current);
+        }
+
+        url = data.has_more ? data.next_page : null;
+      }
+
+      // Do not save incomplete batch results after a 429.
+      if (rateLimited) break;
+
+      const matchedCards = batch.cards.filter(card =>
+        batch.names.includes(card.item_name)
+      );
+
+      for (const card of matchedCards) {
+        if (activeId !== listId) break;
+
+        const result = results.get(card.item_name);
+
+        if (!result) {
+          unavailable++;
+          continue;
+        }
+
+        const changes = {};
+
+        if (result.price != null) {
+          changes.estimated_price = result.price;
+        }
+
+        if (result.colorIdentity != null) {
+          changes.color_identity = result.colorIdentity;
+        }
+
+        if (!Object.keys(changes).length) {
+          unavailable++;
+          continue;
+        }
+
+        const { data, error } = await supabase
+          .from('shopping_list_items')
+          .update(changes)
+          .eq('id', card.id)
+          .eq('list_id', listId)
+          .select()
+          .single();
+
+        if (error) {
+          unavailable++;
+          continue;
+        }
+
+        const index = items.findIndex(item => item.id === card.id);
+
+        if (index >= 0 && activeId === listId) {
+          items[index] = data;
+        }
+
+        updated++;
+      }
+
+      render();
+    }
+
+    if (rateLimited) {
+      message(
+        'Scryfall rate limit reached. Stopped requests. ' +
+        'Saved completed batches remain available.'
+      );
+    } else {
+      message(
+        `Pricing finished: ${updated} updated, ` +
+        `${unavailable} unavailable.`
+      );
+    }
+  } catch (error) {
+    message('Scryfall pricing stopped: ' + error.message);
   } finally {
     syncing = false;
     $('load').disabled = false;
