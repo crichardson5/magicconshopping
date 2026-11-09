@@ -356,3 +356,109 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .dialog-heading { align-items: flex-start; }
   .list-panel .controls > * { max-width: 100%; }
 }
+
+
+/* ========================================
+   WISHCLAW — ASTRAL NIGHT
+   ======================================== */
+
+html {
+  min-height: 100%;
+  background-color: #080612;
+}
+
+body {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 78% 12%, rgba(112, 62, 171, 0.28), transparent 38%),
+    radial-gradient(ellipse at 14% 42%, rgba(66, 46, 132, 0.22), transparent 42%),
+    radial-gradient(ellipse at 78% 78%, rgba(91, 47, 133, 0.17), transparent 43%),
+    linear-gradient(155deg, #0b0818 0%, #151027 48%, #090713 100%);
+  background-attachment: fixed;
+}
+
+/* Two lightweight CSS star layers with separate timing for a varied twinkle. */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  will-change: opacity;
+}
+
+body::before {
+  background-image:
+    radial-gradient(1px 1px at 7% 13%, rgba(244, 231, 255, 0.95) 55%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 17% 72%, rgba(225, 199, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(1px 1px at 26% 29%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(1px 1px at 39% 86%, rgba(221, 195, 255, 0.85) 55%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 48% 19%, rgba(255, 245, 255, 0.95) 55%, transparent 100%),
+    radial-gradient(1px 1px at 61% 57%, rgba(217, 192, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(1px 1px at 72% 31%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 86% 83%, rgba(234, 216, 255, 0.95) 55%, transparent 100%),
+    radial-gradient(1px 1px at 94% 43%, rgba(218, 190, 255, 0.85) 55%, transparent 100%);
+  animation: astral-twinkle-a 5.8s ease-in-out -2.1s infinite alternate;
+}
+
+body::after {
+  background-image:
+    radial-gradient(1px 1px at 11% 52%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(1px 1px at 22% 9%, rgba(215, 190, 255, 0.85) 55%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 34% 63%, rgba(246, 232, 255, 0.95) 55%, transparent 100%),
+    radial-gradient(1px 1px at 44% 37%, rgba(221, 201, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(1px 1px at 56% 92%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 68% 10%, rgba(233, 211, 255, 0.95) 55%, transparent 100%),
+    radial-gradient(1px 1px at 79% 66%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(1px 1px at 91% 24%, rgba(215, 185, 255, 0.85) 55%, transparent 100%);
+  animation: astral-twinkle-b 9.2s ease-in-out -5.4s infinite alternate;
+}
+
+@keyframes astral-twinkle-a {
+  0%, 100% { opacity: 0.48; }
+  48% { opacity: 0.95; }
+  72% { opacity: 0.66; }
+}
+
+@keyframes astral-twinkle-b {
+  0%, 100% { opacity: 0.38; }
+  35% { opacity: 0.82; }
+  68% { opacity: 0.52; }
+}
+
+/* Let the nebula show through while keeping controls and text legible. */
+.top,
+.auth-panel,
+.list-panel {
+  background: linear-gradient(145deg, rgba(36, 31, 59, 0.82), rgba(25, 27, 45, 0.78));
+  border-color: rgba(190, 160, 231, 0.25);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.top {
+  box-shadow: 0 10px 32px rgba(3, 2, 12, 0.4), 0 0 24px rgba(123, 76, 173, 0.08);
+}
+
+dialog {
+  background: rgba(23, 20, 39, 0.96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.divider-star {
+  background: #100b1e;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after {
+    animation: none;
+    will-change: auto;
+  }
+}
