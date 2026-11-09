@@ -660,10 +660,10 @@ async function loadPrices() {
           ? 'foil'
           : 'nonfoil';
 
+    const secretLair =
+      notes.includes('secret lair') ||
+      notes.includes('sld');
 
-    const secretLair = notes.includes('secret lair');
-    const secretLair = notes.includes('SLD');
-    
     const groupKey = `${finish}:${secretLair}`;
 
     if (!groups.has(groupKey)) {
