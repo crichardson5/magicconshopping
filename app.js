@@ -146,19 +146,60 @@ function render() {
   const cards = items.filter(x => x.item_type === 'card'),
     extras = items.filter(x => x.item_type !== 'card');
   const mode = $('sortOrder').value;
+
+
   cards.sort((a, b) => {
-    if (mode === 'color') {
-      const v = colorKey(a).localeCompare(colorKey(b));
-      if (v) return v;
+    const nameDifference = a.item_name.localeCompare(b.item_name);
+
+    const deckDifference = (a.deck || '').localeCompare(b.deck || '');
+
+    const colorDifference = colorKey(a).localeCompare(colorKey(b));
+
+    switch (mode) {
+      case 'color':
+        // Color identity → Card name
+        return colorDifference || nameDifference;
+
+      case 'deck-color':
+        // Color identity → Deck → Card name
+        return colorDifference || deckDifference || nameDifference;
+
+      case 'deck':
+        // Deck → Card name
+        return deckDifference || nameDifference;
+
+      case 'price-asc':
+      case 'price-desc': {
+        const priceA = a.estimated_price == null
+          ? null
+          : Number(a.estimated_price);
+
+        const priceB = b.estimated_price == null
+          ? null
+          : Number(b.estimated_price);
+
+        // Unpriced cards always appear last.
+        if (priceA === null && priceB !== null) return 1;
+        if (priceB === null && priceA !== null) return -1;
+
+        if (priceA !== null && priceB !== null) {
+          const difference = mode === 'price-asc'
+            ? priceA - priceB
+            : priceB - priceA;
+
+          if (difference !== 0) return difference;
+        }
+
+        // Alphabetical tie-breaker.
+        return nameDifference;
+      }
+
+      default:
+        return nameDifference;
     }
-    const deck = (a.deck || '').localeCompare(b.deck || '');
-    if (deck) return deck;
-    if (mode === 'deck-color') {
-      const v = colorKey(a).localeCompare(colorKey(b));
-      if (v) return v;
-    }
-    return a.item_name.localeCompare(b.item_name);
   });
+
+
   $('listHeading').firstChild.textContent = (activeList()?.name || 'Card checklist') + ' — cards ';
   $('cardCount').textContent = `(${cards.length} cards)`;
   const tbody = $('cardRows');
