@@ -148,7 +148,7 @@ function render() {
   const mode = $('sortOrder').value;
 
 
-  cards.sort((a, b) => {
+  cards.sort((a, b) => { //sorts cards
     const nameDifference = a.item_name.localeCompare(b.item_name);
 
     const deckDifference = (a.deck || '').localeCompare(b.deck || '');
@@ -201,25 +201,47 @@ function render() {
 
 
   $('listHeading').firstChild.textContent = (activeList()?.name || 'Card checklist') + ' — cards ';
+  
   $('cardCount').textContent = `(${cards.length} cards)`;
+  
   const tbody = $('cardRows');
-  tbody.innerHTML = cards.length ? cards.map(c => {
-    const url = 'https://scryfall.com/search?q=' + encodeURIComponent('!"' + c.item_name + '"');
-    return `<tr data-id="${html(c.id)}" data-search="${html((c.deck+' '+c.item_name+' '+(c.notes||'')).toLowerCase())}" class="${c.purchased?'checked':''}">
-    <td><input class="check" type="checkbox" ${c.purchased?'checked':''} ${pendingItems.has(c.id)?'disabled':''} aria-label="Bought ${html(c.item_name)}"></td><td>${Number(c.quantity)}</td>
-    <td>${html(c.deck||'Unassigned')}</td><td class="identity">${html(colorLabel(c))}</td>
-    <td><a class="name" href="${html(url)}" target="_blank" rel="noopener">${html(c.item_name)}</a>${c.notes?`<small>${html(c.notes)}</small>`:''}${c.set_code?`<small>Requested printing: ${html(c.set_code.toUpperCase())} ${html(c.collector_number || '')}</small>`:''}${acquisition(c)}</td>
-    <td class="price"><span class="estimate">${c.estimated_price!=null?money(c.estimated_price):'—'}</span><small><a href="${html(url)}" target="_blank" rel="noopener">View printings</a></small></td>
-    <td><button type="button" class="danger delete-item" ${pendingItems.has(c.id)?'disabled':''} aria-label="Remove ${html(c.item_name)}">Remove</button></td>
-   </tr>`;
-  }).join('') : '<tr><td colspan="7" class="muted">This list has no cards.</td></tr>';
+    
+  tbody.innerHTML = cards.length
+    ? cards.map(card => {
+        const url = 'https://scryfall.com/search?q=' + encodeURIComponent(`!"${card.item_name}"`);
+        const purchased = card.purchased ? 'checked' : '';
+        const pending = pendingItems.has(card.id) ? 'disabled' : '';
+        const searchText = `${card.deck} ${card.item_name} ${card.notes || ''}`.toLowerCase();
+
+        const notes = card.notes ? `<small>${html(card.notes)}</small>` : '';
+        const printing = card.set_code
+          ? `<small>Requested printing: ${html(card.set_code.toUpperCase())} ${html(card.collector_number || '')}</small>`
+          : '';
+
+        return `
+          <tr data-id="${html(card.id)}" data-search="${html(searchText)}" class="${purchased}">
+            <td><input class="check" type="checkbox" ${purchased} ${pending} aria-label="Bought ${html(card.item_name)}"></td>
+            <td>${Number(card.quantity)}</td>
+            <td><a class="name" href="${html(url)}" target="_blank" rel="noopener">${html(card.item_name)}</a>${notes}${printing}${acquisition(card)}</td>
+            <td>${html(card.deck || 'Unassigned')}</td>
+            <td class="identity">${html(colorLabel(card))}</td>
+            <td class="price"><span class="estimate">${card.estimated_price != null ? money(card.estimated_price) : '—'}</span><small><a href="${html(url)}" target="_blank" rel="noopener">View printings</a></small></td>
+            <td><button type="button" class="danger delete-item" ${pending} aria-label="Remove ${html(card.item_name)}">Remove</button></td>
+          </tr>
+        `;
+      }).join('') : '<tr><td colspan="7" class="muted">This list has no cards.</td></tr>';
+
+
   $('otherSection').hidden = !extras.length;
+  
   $('extraRows').innerHTML = extras.map(e =>
     `<div class="extra" data-id="${html(e.id)}"><label><input class="extra-check" type="checkbox" ${e.purchased?'checked':''} ${pendingItems.has(e.id)?'disabled':''}> ${html(e.item_name)}</label>${acquisition(e)}</div>`
     ).join('');
+  
   const query = $('search').value.toLowerCase().trim();
-  tbody.querySelectorAll('tr[data-search]').forEach(r => r.classList.toggle('hidden', !r.dataset
-    .search.includes(query)));
+  
+  tbody.querySelectorAll('tr[data-search]').forEach(r => r.classList.toggle('hidden', !r.dataset.search.includes(query)));
+  
   totals();
 }
 
