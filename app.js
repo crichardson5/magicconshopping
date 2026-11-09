@@ -761,6 +761,7 @@ async function loadPrices() {
 
           const priceField = {
             nonfoil: 'usd',
+            confetti: 'usd_foil',
             foil: 'usd_foil',
             etched: 'usd_etched'
           }[batch.finish];
