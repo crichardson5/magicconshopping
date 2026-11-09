@@ -43,7 +43,7 @@
       }
       .stats b {
         color:#d8f7c5
-      }     
+      }
       button {
         background:#865dc3;
         color:white;
@@ -308,4 +308,51 @@
         }
       }
 
-    
+
+/* Guided list creation and member attribution. */
+dialog {
+  width: min(760px, calc(100% - 24px));
+  max-height: 90dvh;
+  overflow-y: auto;
+  background: #171b2a;
+  color: #f1f0f7;
+  border: 1px solid #865dc3;
+  border-radius: 16px;
+  padding: 20px;
+}
+dialog::backdrop { background: #000b; }
+.dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.dialog-heading h2 { margin: 0 0 16px; }
+dialog label { display: block; margin: 12px 0 6px; }
+dialog input:not([type=checkbox]), dialog textarea, dialog select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  background: #20253a;
+  color: #fff;
+  border: 1px solid #58617a;
+  border-radius: 8px;
+  padding: 10px;
+  font: inherit;
+  font-size: 16px;
+}
+dialog textarea { resize: vertical; }
+dialog button { margin: 8px 0; }
+.check-label { display: flex; align-items: center; gap: 10px; }
+.check-label input { flex-shrink: 0; }
+.draft-card { border: 1px solid #454b66; border-radius: 10px; margin: 16px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.draft-card legend { color: #d7b7ff; }
+.draft-card .validation-note { grid-column: 1 / -1; overflow-wrap: anywhere; }
+.card-preview { background: #27213c; border-radius: 10px; padding: 12px; overflow-wrap: anywhere; }
+.acquisition { color: #d8f7c5; font-size: 12px; overflow-wrap: anywhere; }
+button, input, select { min-height: 44px; }
+input[type=checkbox] { min-height: 24px; width: 24px; height: 24px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 3px solid #d7b7ff; outline-offset: 3px; }
+#addCard { margin-bottom: 12px; }
+#status, #creationMessage, #cardMessage { overflow-wrap: anywhere; }
+@media (max-width: 650px) {
+  dialog { padding: 14px; }
+  .draft-card { grid-template-columns: 1fr; }
+  .dialog-heading { align-items: flex-start; }
+  .list-panel .controls > * { max-width: 100%; }
+}

@@ -1,3 +1,5 @@
+import { setupListTools } from './modules/list-tools.js';
+import { listRepository } from './modules/list-repository.js';
 // Supabase client and application state
 import {
   createClient
@@ -62,36 +64,12 @@ function html(v) {
   } [c]));
 }
 
-// JSON card validation
-function normalizeCards(input) {
-  const entries = Array.isArray(input) ? input : input?.cards;
-  if (!Array.isArray(entries) || !entries.length || entries.length > 500) throw Error(
-    'JSON must contain 1–500 cards in an array or cards property.');
-  return entries.map((x, i) => {
-    if (!x || !String(x.name || '').trim()) throw Error(`Card ${i+1} is missing its name.`);
-    const qty = Number(x.qty ?? 1);
-    if (!Number.isInteger(qty) || qty < 1 || qty > 999) throw Error(
-      `Card ${i+1} has an invalid qty.`);
-    const ident = x.colorIdentity ?? x.color_identity;
-    let colorIdentity = null;
-    if (Array.isArray(ident)) {
-      const codes = ident.map(x => String(x).toUpperCase());
-      if (codes.some(c => !colorOrder.includes(c))) throw Error(
-        `Invalid color identity at card ${i+1}.`);
-      colorIdentity = colorOrder.filter(c => codes.includes(c));
-    } else if (typeof ident === 'string' && /^[WUBRG,\s]*$/i.test(ident)) {
-      const codes = ident.toUpperCase().match(/[WUBRG]/g) || [];
-      colorIdentity = colorOrder.filter(c => codes.includes(c));
-    }
-    return {
-      name: String(x.name).trim().slice(0, 250),
-      deck: String(x.deck || 'Unassigned').trim().slice(0, 150),
-      qty,
-      note: String(x.note || '').slice(0, 1500),
-      colorIdentity
-    };
-  });
-}
+const repository = listRepository(supabase);
+let approved = false;
+let profiles = new Map();
+const pendingItems = new Set();
+let itemRequest = 0;
+let listRequest = 0;
 
 // Shared lists and item loading
 function activeList() {
@@ -104,6 +82,8 @@ function setAuthVisible(signedIn) {
   $('app').hidden = !signedIn;
 }
 async function loadLists(preferredId = activeId) {
+  const request = ++listRequest;
+  const epoch = generation;
   const {
     data,
     error
@@ -112,6 +92,7 @@ async function loadLists(preferredId = activeId) {
       ascending: true
     });
   if (error) throw error;
+  if (request !== listRequest || epoch !== generation) return;
   lists = data || [];
   activeId = lists.find(l => l.id === preferredId)?.id || lists[0]?.id || null;
   $('activeList').innerHTML = lists.length ? lists.map(l =>
@@ -123,10 +104,12 @@ async function loadLists(preferredId = activeId) {
 }
 async function loadItems() {
   const requestedId = activeId;
+  const requestId = ++itemRequest;
+  const sessionGeneration = generation;
   if (!requestedId) {
     items = [];
     render();
-    message('No shared lists yet. Upload a JSON list to create the first one.');
+    message('No shared lists yet. Use + Create List to begin.');
     return;
   }
   const {
@@ -137,7 +120,7 @@ async function loadItems() {
       ascending: true
     }).range(0, 999);
   if (error) throw error;
-  if (requestedId !== activeId) return;
+  if (requestedId !== activeId || requestId !== itemRequest || sessionGeneration !== generation) return;
   items = data || [];
   render();
   message(
@@ -159,6 +142,7 @@ function colorKey(row) {
 }
 
 function render() {
+  $('addCard').disabled = !approved || !activeId;
   const cards = items.filter(x => x.item_type === 'card'),
     extras = items.filter(x => x.item_type !== 'card');
   const mode = $('sortOrder').value;
@@ -181,15 +165,16 @@ function render() {
   tbody.innerHTML = cards.length ? cards.map(c => {
     const url = 'https://scryfall.com/search?q=' + encodeURIComponent('!"' + c.item_name + '"');
     return `<tr data-id="${html(c.id)}" data-search="${html((c.deck+' '+c.item_name+' '+(c.notes||'')).toLowerCase())}" class="${c.purchased?'checked':''}">
-    <td><input class="check" type="checkbox" ${c.purchased?'checked':''} aria-label="Bought ${html(c.item_name)}"></td><td>${Number(c.quantity)}</td>
+    <td><input class="check" type="checkbox" ${c.purchased?'checked':''} ${pendingItems.has(c.id)?'disabled':''} aria-label="Bought ${html(c.item_name)}"></td><td>${Number(c.quantity)}</td>
     <td>${html(c.deck||'Unassigned')}</td><td class="identity">${html(colorLabel(c))}</td>
-    <td><a class="name" href="${html(url)}" target="_blank" rel="noopener">${html(c.item_name)}</a>${c.notes?`<small>${html(c.notes)}</small>`:''}</td>
+    <td><a class="name" href="${html(url)}" target="_blank" rel="noopener">${html(c.item_name)}</a>${c.notes?`<small>${html(c.notes)}</small>`:''}${c.set_code?`<small>Requested printing: ${html(c.set_code.toUpperCase())} ${html(c.collector_number || '')}</small>`:''}${acquisition(c)}</td>
     <td class="price"><span class="estimate">${c.estimated_price!=null?money(c.estimated_price):'—'}</span><small><a href="${html(url)}" target="_blank" rel="noopener">View printings</a></small></td>
+    <td><button type="button" class="danger delete-item" ${pendingItems.has(c.id)?'disabled':''} aria-label="Remove ${html(c.item_name)}">Remove</button></td>
    </tr>`;
   }).join('') : '<tr><td colspan="7" class="muted">This list has no cards.</td></tr>';
   $('otherSection').hidden = !extras.length;
   $('extraRows').innerHTML = extras.map(e =>
-    `<div class="extra" data-id="${html(e.id)}"><label><input class="extra-check" type="checkbox" ${e.purchased?'checked':''}> ${html(e.item_name)}</label></div>`
+    `<div class="extra" data-id="${html(e.id)}"><label><input class="extra-check" type="checkbox" ${e.purchased?'checked':''} ${pendingItems.has(e.id)?'disabled':''}> ${html(e.item_name)}</label>${acquisition(e)}</div>`
     ).join('');
   const query = $('search').value.toLowerCase().trim();
   tbody.querySelectorAll('tr[data-search]').forEach(r => r.classList.toggle('hidden', !r.dataset
@@ -210,37 +195,58 @@ function totals() {
 }
 
 // Item updates and live synchronization
+function acquisition(item) {
+  if (!item.purchased) return '';
+  const name = item.purchased_by ? (profiles.get(item.purchased_by) || 'Checklist member') : null;
+  const label = name ? 'Acquired — marked by ' + name : item.purchased_at
+    ? 'Acquired — purchaser no longer available' : 'Acquired — legacy acquisition (purchaser unknown)';
+  return '<small class="acquisition">' + html(label) +
+    (item.purchased_at ? ' · <time datetime="' + html(item.purchased_at) + '">' + html(new Date(item.purchased_at).toLocaleString()) + '</time>' : '') + '</small>';
+}
+
+async function loadProfiles() {
+  const epoch = generation;
+  const { data, error } = await supabase.from('wishclaw_profiles').select('user_id,display_name');
+  if (error) throw error;
+  if (epoch !== generation) return;
+  profiles = new Map((data || []).map(profile => [profile.user_id, profile.display_name]));
+  $('displayName').value = profiles.get(user?.id) || '';
+  render();
+}
+
 async function patchItem(id, changes) {
-  const prev = items.find(x => x.id === id);
-  if (!prev) return;
-  const old = {
-    ...prev
-  };
-  Object.assign(prev, changes);
+  if (!approved || pendingItems.has(id)) return;
+  const epoch = generation;
+  const listId = activeId;
+  pendingItems.add(id);
   render();
   syncMessage('Saving…');
-  const {
-    data,
-    error
-  } = await supabase.from('shopping_list_items').update(changes).eq('id', id).select().single();
-  if (error) {
-    Object.assign(prev, old);
-    render();
-    message('Save failed: ' + error.message);
-    syncMessage('Save failed');
-    return;
+  try {
+    const { data, error } = await supabase.from('shopping_list_items').update(changes)
+      .eq('id', id).eq('list_id', listId).select().single();
+    if (error) throw error;
+    if (epoch !== generation) return;
+    if (activeId === listId) {
+      const index = items.findIndex(item => item.id === id);
+      if (index >= 0) items[index] = data;
+    }
+    syncMessage('Live');
+  } catch (error) {
+    if (epoch === generation) {
+      message('Save failed: ' + error.message);
+      syncMessage('Save failed');
+    }
+  } finally {
+    pendingItems.delete(id);
+    if (epoch === generation) render();
   }
-  if (data) {
-    const ix = items.findIndex(x => x.id === id);
-    if (ix >= 0) items[ix] = data;
-    render();
-  }
-  syncMessage('Live');
 }
 
 function realtime() {
   if (channel) supabase.removeChannel(channel);
   channel = supabase.channel('shopping-change-' + user.id)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'wishclaw_profiles' },
+      () => loadProfiles().catch(error => message('Profile refresh failed: ' + error.message)))
     .on('postgres_changes', {
       event: '*',
       schema: 'public',
@@ -268,6 +274,9 @@ async function handleSession(session) {
   if (user?.id === next?.id) return;
   const epoch = ++generation;
   user = next;
+  approved = false;
+  profiles.clear();
+  listTools.close();
   if (channel) {
     supabase.removeChannel(channel);
     channel = null;
@@ -276,9 +285,12 @@ async function handleSession(session) {
     setAuthVisible(false);
     items = [];
     lists = [];
+    activeId = null;
+    pendingItems.clear();
     return;
   }
   setAuthVisible(true);
+  $('app').hidden = true;
   $('accountName').textContent = user.email || 'Signed in';
   try {
     const {
@@ -296,8 +308,12 @@ async function handleSession(session) {
       return;
     }
     if (epoch !== generation) return;
+    approved = true;
     await loadLists();
-    realtime();
+    if (epoch !== generation) return;
+    $('app').hidden = false;
+    await loadProfiles().catch(error => message('Display names unavailable: ' + error.message + '. Apply the list-management migration.'));
+    if (epoch === generation && approved) realtime();
   } catch (e) {
     message('Could not load lists: ' + e.message);
     syncMessage('Error');
@@ -395,6 +411,8 @@ supabase.auth.onAuthStateChange((event, session) => {
     recoveryMode = true;
     generation++;
     user = null;
+    approved = false;
+    listTools.close();
     if (channel) {
       supabase.removeChannel(channel);
       channel = null;
@@ -419,9 +437,10 @@ if (urlParams.has('error_description')) {
 
 // Checklist controls
 $('activeList').addEventListener('change', async e => {
+  ++listRequest;
   activeId = e.target.value || null;
   $('removeList').hidden = !activeList() || activeList()?.created_by !== user.id;
-  await loadItems();
+  await loadItems().catch(error => message('Could not load list: ' + error.message));
 });
 $('cardRows').addEventListener('change', e => {
   const r = e.target.closest('tr[data-id]');
@@ -429,17 +448,7 @@ $('cardRows').addEventListener('change', e => {
   if (e.target.matches('.check')) patchItem(r.dataset.id, {
     purchased: e.target.checked
   });
-  else if (e.target.matches('.paid')) {
-    const raw = e.target.value;
-    if (raw !== '' && (!Number.isFinite(Number(raw)) || Number(raw) < 0)) {
-      message('Price paid must be a nonnegative number.');
-      render();
-      return;
-    }
-    patchItem(r.dataset.id, {
-      price_paid: raw === '' ? null : Number(raw)
-    });
-  }
+
 });
 $('extraRows').addEventListener('change', e => {
   const r = e.target.closest('[data-id]');
@@ -454,46 +463,44 @@ $('search').oninput = () => {
     .dataset.search.includes(q)));
 };
 
+$('cardRows').addEventListener('click', async event => {
+  const button = event.target.closest('.delete-item');
+  const row = button?.closest('tr[data-id]');
+  if (!row || !approved || pendingItems.has(row.dataset.id)) return;
+  const item = items.find(value => value.id === row.dataset.id);
+  if (!item || !confirm('Remove “' + item.item_name + '” from this shared list? This affects everyone.')) return;
+  const epoch = generation;
+  pendingItems.add(item.id);
+  render();
+  try {
+    await repository.remove(item.list_id, item.id);
+    if (epoch !== generation) return;
+    items = items.filter(value => value.id !== item.id);
+    message('Card removed.');
+  } catch (error) { if (epoch === generation) message('Remove failed: ' + error.message); }
+  finally { pendingItems.delete(item.id); if (epoch === generation) render(); }
+});
+
+$('profileForm').onsubmit = async event => {
+  event.preventDefault();
+  if (!approved) return;
+  const epoch = generation;
+  $('saveProfile').disabled = true;
+  try {
+    const profile = await repository.saveProfile(user.id, $('displayName').value);
+    if (epoch !== generation) return;
+    profiles.set(profile.user_id, profile.display_name);
+    $('profileStatus').textContent = 'Display name saved.';
+    render();
+  } catch (error) { $('profileStatus').textContent = 'Could not save display name: ' + error.message; }
+  finally { $('saveProfile').disabled = false; }
+};
+
 // Import uploaded JSON and manage shared lists
 async function importList(raw, suggestedName) {
-  if (!user) throw Error('Sign in first.');
-  const cards = normalizeCards(raw);
-  const suggested = raw?.name || raw?.title || suggestedName || 'Imported cards';
-  const name = prompt('Name for this new shared list:', suggested);
-  if (name === null) return;
-  if (!name.trim() || name.trim().length > 120) throw Error(
-  'List name must be 1–120 characters.');
-  message(`Creating shared list “${name.trim()}” with ${cards.length} cards…`);
-  const {
-    data,
-    error
-  } = await supabase.rpc('create_shopping_list', {
-    p_name: name.trim(),
-    p_cards: cards.map(c => ({
-      name: c.name,
-      deck: c.deck,
-      qty: c.qty,
-      note: c.note,
-      colorIdentity: c.colorIdentity
-    }))
-  });
-  if (error) throw error;
-  await loadLists(data);
-  message(`Created “${name.trim()}” with ${cards.length} cards. Everyone can see it now.`);
+  if (!approved) throw Error('Sign in with an approved account first.');
+  listTools.openCreation(raw, raw?.name || raw?.title || suggestedName);
 }
-$('createFromJson').onclick = () => $('newListFile').click();
-$('newListFile').onchange = async e => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  try {
-    if (file.size > 1024 * 1024) throw Error('JSON files must be smaller than 1 MB.');
-    await importList(JSON.parse(await file.text()), file.name.replace(/\.json$/i, ''));
-  } catch (err) {
-    message('Could not create list: ' + err.message);
-  } finally {
-    e.target.value = '';
-  }
-};
 $('removeList').onclick = async () => {
   const list = activeList();
   if (!list || list.created_by !== user?.id) return;
@@ -657,6 +664,32 @@ async function loadPrices() {
     render();
   }
 }
+
+const listTools = setupListTools({
+  canWrite: () => approved && Boolean(user),
+  activeId: () => activeId,
+  async create(name, cards) {
+    if (!approved) throw Error('Approved membership required.');
+    const epoch = generation;
+    const id = await repository.create(name, cards);
+    if (epoch !== generation) return;
+    activeId = id;
+    try {
+      await loadLists(id);
+      message('Created “' + name + '”. Everyone can see it now.');
+    } catch (error) { message('List created, but refresh failed. Reload the page: ' + error.message); }
+  },
+  async add(listId, card, merge) {
+    if (!approved) throw Error('Approved membership required.');
+    const epoch = generation;
+    await repository.add(listId, card, merge);
+    if (epoch !== generation) return;
+    try {
+      if (activeId === listId) await loadItems();
+      message('Card added to the shared list.');
+    } catch (error) { message('Card added, but refresh failed. Reload the page: ' + error.message); }
+  }
+});
 
 // Startup
 $('load').onclick = loadPrices;

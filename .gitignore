@@ -1,0 +1,2 @@
+# Local verification tools; the deployed application has no package dependencies.
+tests/node_modules/

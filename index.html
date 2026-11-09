@@ -69,11 +69,12 @@
       <p id="authError" class="warning" role="alert" aria-live="polite"></p>
       <p id="authNotice" class="notice" role="status" aria-live="polite"></p>
     </div>
+    <div id="signedInPanel" class="auth-controls" hidden><span id="accountName"></span><span class="pill" id="syncState">Connecting…</span><button id="signOut" class="secondary" type="button">Sign out</button></div>
     <div id="app" hidden>
     <div class="list-panel">
       <h2 style="margin-top:0">Shared lists</h2>
-      <div class="controls"><select id="activeList" aria-label="Select shared list"><option>Loading lists…</option></select></div>
-      <div class="list-actions"><button id="removeList" type="button" class="danger" hidden>Delete selected list</button><span class="list-note">Everyone sees every shared list and items marked off sync for all users. Uploading creates a new list; it never replaces an existing one.</span></div>
+      <div class="controls"><button id="createList" type="button">+ Create List</button><select id="activeList" aria-label="Select shared list"><option>Loading lists…</option></select></div>
+      <div class="list-actions"><button id="removeList" type="button" class="danger" hidden>Delete selected list</button><span class="list-note">Everyone sees every shared list and items marked off sync for all users. Create lists from scratch, pasted decklists or JSON.</span></div>
     </div>
     <div class="top">
       <div class="stats">
@@ -100,6 +101,7 @@
     </div>
     <section>
       <h2 id="listHeading">Card checklist <span id="cardCount" class="section-count">(0 cards)</span></h2>
+      <button id="addCard" type="button" disabled>+ Add Card</button>
       <div class="card-table-wrap">
       <table>
         <thead>
@@ -110,10 +112,11 @@
             <th>Color identity</th>
             <th>Card / notes</th>
             <th>Scryfall USD</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody id="cardRows">
-          <tr><td colspan="6" class="muted">Import or load a card list to get started.</td></tr>
+          <tr><td colspan="7" class="muted">Import or load a card list to get started.</td></tr>
         </tbody>
       </table>
       </div>
@@ -122,12 +125,15 @@
     <section class="list-panel" id="listManagement" aria-labelledby="listManagementHeading">
       <h2 id="listManagementHeading" style="margin-top:0">List Management</h2>
       <div class="management-group">
-        <h3>Upload a shared list</h3>
-        <div class="controls">
-          <button id="createFromJson" type="button">Upload JSON as new shared list</button>
-          <input id="newListFile" type="file" accept=".json,application/json" hidden>
-        </div>
+        <h3>Your display name</h3>
+        <form id="profileForm" class="controls">
+          <label for="displayName">Shown beside cards you acquire</label>
+          <input id="displayName" type="text" maxlength="60" required placeholder="Your name" autocomplete="nickname">
+          <button id="saveProfile" type="submit">Save display name</button>
+        </form>
+        <p id="profileStatus" role="status" aria-live="polite"></p>
       </div>
+
       <div class="management-group">
         <h3>Add a hosted list</h3>
         <div class="controls">
@@ -146,8 +152,51 @@
       </div>
     </section>
     </div>
-    <div id="signedInPanel" class="auth-controls" hidden><span id="accountName"></span><span class="pill" id="syncState">Connecting…</span><button id="signOut" class="secondary" type="button">Sign out</button></div>
     <footer>2026 Caleb Richardson. All rights reserved.</footer>
+    <dialog id="createDialog" aria-labelledby="createDialogTitle">
+      <form id="creationForm">
+        <div class="dialog-heading"><h2 id="createDialogTitle">Create New List</h2><button type="button" class="secondary" data-close aria-label="Close list creation">Close</button></div>
+        <label for="newListName">List name</label><input id="newListName" maxlength="120" required autocomplete="off">
+        <label for="creationMethod">How would you like to start?</label>
+        <select id="creationMethod"><option value="scratch">Start from scratch</option><option value="paste">Paste a decklist</option><option value="json">Import JSON</option></select>
+        <div id="method-scratch"><p>Create an empty list, then use + Add Card to build it one card at a time.</p></div>
+        <div id="method-paste" hidden>
+          <label for="decklistText">Moxfield export or plain-text decklist</label>
+          <textarea id="decklistText" rows="8" placeholder="1 Sol Ring&#10;1x Demonic Tutor&#10;1 Blood Artist (CMM) 145"></textarea>
+          <button id="parseDecklist" type="button">Preview decklist</button>
+        </div>
+        <div id="method-json" hidden>
+          <p>Choose an existing Wishclaw card array or an object with a name and cards.</p>
+          <button id="createFromJson" type="button">Choose JSON file</button>
+          <input id="newListFile" type="file" accept=".json,application/json" hidden>
+        </div>
+        <div id="reviewOptions" hidden>
+          <p>Review every entry below. Correct names, quantities, categories or printings before saving.</p>
+          <label class="check-label"><input id="mergeDuplicates" type="checkbox" checked> Merge matching entries (same category, notes and printing)</label>
+          <button id="validateDecklist" type="button">Validate cards with Scryfall</button>
+          <label class="check-label"><input id="allowUnverified" type="checkbox"> I have reviewed the entries and want to keep unverified card names</label>
+        </div>
+        <p id="creationMessage" class="warning" role="status" aria-live="polite"></p>
+        <div id="creationPreview"></div>
+        <button id="saveNewList" type="submit">Create shared list</button>
+      </form>
+    </dialog>
+    <dialog id="addCardDialog" aria-labelledby="addCardTitle">
+      <form id="addCardForm">
+        <div class="dialog-heading"><h2 id="addCardTitle">Add a card</h2><button type="button" class="secondary" data-close aria-label="Close add card">Close</button></div>
+        <label for="cardName">Card name</label><input id="cardName" list="cardSuggestions" maxlength="250" required autocomplete="off"><datalist id="cardSuggestions"></datalist>
+        <label for="cardQuantity">Quantity</label><input id="cardQuantity" type="number" min="1" max="999" step="1" value="1" required>
+        <label for="cardCategory">Deck / category (optional)</label><input id="cardCategory" maxlength="150">
+        <label for="cardNotes">Notes (optional)</label><textarea id="cardNotes" maxlength="1500" rows="3"></textarea>
+        <label class="check-label"><input id="mergeExisting" type="checkbox" checked> Merge with a matching unpurchased entry</label>
+        <button id="previewCard" type="button">Preview card</button>
+        <p id="singleCardPreview" class="card-preview" aria-live="polite"></p>
+        <label class="check-label"><input id="allowUnverifiedCard" type="checkbox"> Add this card even if Scryfall cannot verify it</label>
+        <p id="cardMessage" class="warning" role="status" aria-live="polite"></p>
+        <button id="saveCard" type="submit">Add to selected list</button>
+      </form>
+    </dialog>
+
 <script type="module" src="./app.js"></script>
 </body>
 </html>
