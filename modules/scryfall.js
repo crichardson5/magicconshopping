@@ -37,7 +37,8 @@ export async function findCard(name) {
 }
 
 
-export async function findPrinting(name, setCode, collectorNumber) {
+
+export async function findPrinting(name, setCode = '', collectorNumber = '') {
   const set = setCode.trim().toLowerCase();
   const number = collectorNumber.trim();
 
@@ -49,6 +50,8 @@ export async function findPrinting(name, setCode, collectorNumber) {
     ? `cards/${encodeURIComponent(set)}/${encodeURIComponent(number)}`
     : 'cards/named?exact=' + encodeURIComponent(name.trim()) +
       (set ? '&set=' + encodeURIComponent(set) : '');
+
+  const found = await request(path);
 
   const matchesName = [
     found.name,
@@ -65,7 +68,6 @@ export async function findPrinting(name, setCode, collectorNumber) {
 
   return found;
 }
-
 
 const sameName = (card, name) => [card.name, ...(card.card_faces || []).map(face => face.name)]
   .some(value => value.toLowerCase() === name.toLowerCase());
