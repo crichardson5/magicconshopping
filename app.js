@@ -212,7 +212,11 @@ function render() {
     
   tbody.innerHTML = cards.length
     ? cards.map(card => {
-        const url = 'https://scryfall.com/search?q=' + encodeURIComponent(`!"${card.item_name}"`);
+
+        const url = card.set_code && card.collector_number
+          ? `https://scryfall.com/card/${encodeURIComponent(card.set_code.toLowerCase())}/${encodeURIComponent(card.collector_number)}`
+          : 'https://scryfall.com/search?q=' + encodeURIComponent(`!"${card.item_name}"`);
+        
         const purchased = card.purchased ? 'checked' : '';
         const pending = pendingItems.has(card.id) ? 'disabled' : '';
         const searchText = `${card.deck} ${card.item_name} ${card.notes || ''}`.toLowerCase();
