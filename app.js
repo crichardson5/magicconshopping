@@ -156,6 +156,8 @@ function render() {
     const colorDifference = colorKey(a).localeCompare(colorKey(b));
 
     switch (mode) {
+      case 'alpha':
+        return nameDifference;
       case 'color':
         // Color identity → Card name
         return colorDifference || nameDifference;

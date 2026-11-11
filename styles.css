@@ -390,45 +390,48 @@ body::after {
   background-repeat: no-repeat;
   background-size: 100% 100%;
   will-change: opacity;
+  filter:
+    drop-shadow(0 0 3px rgba(225, 190, 255, 0.95))
+    drop-shadow(0 0 7px rgba(166, 105, 255, 0.65));
 }
 
 body::before {
   background-image:
-    radial-gradient(1px 1px at 7% 13%, rgba(244, 231, 255, 0.95) 55%, transparent 100%),
-    radial-gradient(1.5px 1.5px at 17% 72%, rgba(225, 199, 255, 0.9) 55%, transparent 100%),
-    radial-gradient(1px 1px at 26% 29%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
-    radial-gradient(1px 1px at 39% 86%, rgba(221, 195, 255, 0.85) 55%, transparent 100%),
-    radial-gradient(1.5px 1.5px at 48% 19%, rgba(255, 245, 255, 0.95) 55%, transparent 100%),
-    radial-gradient(1px 1px at 61% 57%, rgba(217, 192, 255, 0.9) 55%, transparent 100%),
-    radial-gradient(1px 1px at 72% 31%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
-    radial-gradient(1.5px 1.5px at 86% 83%, rgba(234, 216, 255, 0.95) 55%, transparent 100%),
-    radial-gradient(1px 1px at 94% 43%, rgba(218, 190, 255, 0.85) 55%, transparent 100%);
+    radial-gradient(2px 2px at 7% 13%, rgba(244, 231, 255, 0.95) 55%, transparent 100%),
+    radial-gradient(3px 3px at 17% 72%, rgba(225, 199, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(2px 2px at 26% 29%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(2px 2px at 39% 86%, rgba(221, 195, 255, 0.85) 55%, transparent 100%),
+    radial-gradient(3px 3px at 48% 19%, rgba(255, 245, 255, 0.95) 55%, transparent 100%),
+    radial-gradient(2px 2px at 61% 57%, rgba(217, 192, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(2px 2px at 72% 31%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(3px 3px at 86% 83%, rgba(234, 216, 255, 0.95) 55%, transparent 100%),
+    radial-gradient(2px 2px at 94% 43%, rgba(218, 190, 255, 0.85) 55%, transparent 100%);
   animation: astral-twinkle-a 5.8s ease-in-out -2.1s infinite alternate;
 }
 
 body::after {
   background-image:
-    radial-gradient(1px 1px at 11% 52%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
-    radial-gradient(1px 1px at 22% 9%, rgba(215, 190, 255, 0.85) 55%, transparent 100%),
-    radial-gradient(1.5px 1.5px at 34% 63%, rgba(246, 232, 255, 0.95) 55%, transparent 100%),
-    radial-gradient(1px 1px at 44% 37%, rgba(221, 201, 255, 0.9) 55%, transparent 100%),
-    radial-gradient(1px 1px at 56% 92%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
-    radial-gradient(1.5px 1.5px at 68% 10%, rgba(233, 211, 255, 0.95) 55%, transparent 100%),
-    radial-gradient(1px 1px at 79% 66%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
-    radial-gradient(1px 1px at 91% 24%, rgba(215, 185, 255, 0.85) 55%, transparent 100%);
+    radial-gradient(2px 2px at 11% 52%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(2px 2px at 22% 9%, rgba(215, 190, 255, 0.85) 55%, transparent 100%),
+    radial-gradient(3px 3px at 34% 63%, rgba(246, 232, 255, 0.95) 55%, transparent 100%),
+    radial-gradient(2px 2px at 44% 37%, rgba(221, 201, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(2px 2px at 56% 92%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(3px 3px at 68% 10%, rgba(233, 211, 255, 0.95) 55%, transparent 100%),
+    radial-gradient(2px 2px at 79% 66%, rgba(255, 255, 255, 0.9) 55%, transparent 100%),
+    radial-gradient(2px 2px at 91% 24%, rgba(215, 185, 255, 0.85) 55%, transparent 100%);
   animation: astral-twinkle-b 9.2s ease-in-out -5.4s infinite alternate;
 }
 
 @keyframes astral-twinkle-a {
-  0%, 100% { opacity: 0.48; }
-  48% { opacity: 0.95; }
-  72% { opacity: 0.66; }
+  0%, 100% { opacity: 0.65; }
+  48% { opacity: 1; }
+  72% { opacity: 0.80; }
 }
 
 @keyframes astral-twinkle-b {
-  0%, 100% { opacity: 0.38; }
-  35% { opacity: 0.82; }
-  68% { opacity: 0.52; }
+  0%, 100% { opacity: 0.55; }
+  35% { opacity: 1; }
+  68% { opacity: 0.75; }
 }
 
 /* Let the nebula show through while keeping controls and text legible. */
