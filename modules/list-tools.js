@@ -147,22 +147,26 @@ export function setupListTools(api) {
     $('singleCardPreview').textContent = card.qty + ' × ' + card.name + ' · ' + card.deck +
       (card.note ? ' · ' + card.note : '') + (known ? ' — recognized by Scryfall' : ' — unverified');
   }
-  
+
 function singleInput() {
-  const finish = $('cardFinish').value;
-  const note = $('cardNotes').value.trim();
-  const finishNote = finish ? `Finish: ${finish}` : '';
+  const setCode = $('cardSetCode').value.trim();
+  const collectorNumber = $('cardCollectorNumber').value.trim();
+
+  if (collectorNumber && !setCode) {
+    throw Error('A collector number requires a set code.');
+  }
 
   return normalizeCards([{
     name: $('cardName').value,
     qty: $('cardQuantity').value,
-    deck: $('cardCategory').value,  
-    finish: $('cardFinish').value,
-    note: [note, finishNote].filter(Boolean).join(' | '),
-    setCode: $('cardSetCode').value,
-    collectorNumber: $('cardCollectorNumber').value
+    deck: $('cardCategory').value,
+    note: $('cardNotes').value,
+    setCode,
+    collectorNumber,
+    finish: $('cardFinish').value
   }])[0];
 }
+
 
   $('addCard').onclick = () => {
     if (!api.canWrite() || !api.activeId()) return;
@@ -194,6 +198,13 @@ function singleInput() {
       } catch (error) { if (version === lookupVersion) $('cardMessage').textContent = 'Autocomplete unavailable. Enter a name and use Preview card.'; }
     }, 400);
   };
+
+  $('cardFinish').addEventListener('change', () => {
+    previewedCard = null;
+    lookupVersion++;
+    $('singleCardPreview').textContent = 'Preview the card before adding it.';
+  });
+
   
   $('previewCard').onclick = async () => {
     if (adding) return;
@@ -204,13 +215,18 @@ function singleInput() {
       card = singleInput();
       adding = true;
       lock($('addCardDialog'), true);
-      $('cardMessage').textContent = 'Looking up printing…';
+      $('cardMessage').textContent = 'Looking up card…';
 
-      const found = await findPrinting(card.name, card.setCode, card.collectorNumber);
-      const finish = $('cardFinish').value;
+      const hasSet = Boolean(card.setCode);
+      const exactPrinting = Boolean(card.setCode && card.collectorNumber);
 
-      if (finish && !found.finishes?.includes(finish) && card.setCode) {
-        throw Error(`This printing is not available in ${finish}.`);
+      const found = hasSet
+        ? await findPrinting(card.name, card.setCode, card.collectorNumber)
+        : await findCard(card.name);
+
+      // For an exact printing, ensure the requested finish exists.
+      if (exactPrinting && card.finish && !found.finishes?.includes(card.finish)) {
+        throw Error(`This printing is not available in ${card.finish}.`);
       }
 
       previewedCard = {
@@ -218,28 +234,53 @@ function singleInput() {
         name: found.name,
         colorIdentity: found.color_identity,
         setCode: card.setCode ? found.set : '',
-        collectorNumber: card.setCode ? found.collector_number : '',
-        scryfallId: card.setCode ? found.id : null
+        collectorNumber: exactPrinting ? found.collector_number : '',
+        scryfallId: exactPrinting ? found.id : null
       };
+
+      // Keep the input consistent with Scryfall's canonical name.
+      $('cardName').value = found.name;
 
       showCardPreview(previewedCard, true);
 
-      if (card.setCode) {
+      if (hasSet) {
         $('singleCardPreview').textContent +=
-          ` · ${found.set.toUpperCase()} #${found.collector_number}` +
-          (finish ? ` · ${finish}` : '');
+          ` · Set: ${found.set.toUpperCase()}`;
+      }
+
+      if (exactPrinting) {
+        $('singleCardPreview').textContent +=
+          ` · #${found.collector_number}`;
+      }
+
+      if (card.finish) {
+        $('singleCardPreview').textContent +=
+          ` · ${card.finish}`;
       }
 
       $('cardMessage').textContent = '';
     } catch (error) {
-      previewedCard = null;
-      $('singleCardPreview').textContent = '';
+      const hasPrintingRequest = Boolean(card?.setCode || card?.collectorNumber);
+
+      // Preserve unverified-card support for ordinary card names.
+      // Never bypass validation for a requested printing.
+      previewedCard = card && !hasPrintingRequest
+        ? { ...card, unverified: true }
+        : null;
+
+      if (previewedCard) {
+        showCardPreview(previewedCard, false);
+      } else {
+        $('singleCardPreview').textContent = '';
+      }
+
       $('cardMessage').textContent = error.message;
     } finally {
       adding = false;
       lock($('addCardDialog'), false);
     }
   };
+
 
   $('addCardForm').onsubmit = async event => {
     event.preventDefault();
