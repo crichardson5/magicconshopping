@@ -41,13 +41,14 @@ export async function findPrinting(name, setCode, collectorNumber) {
   const set = setCode.trim().toLowerCase();
   const number = collectorNumber.trim();
 
-  if (!set || !number) {
-    throw Error('Enter both a set code and collector number.');
+  if (number && !set) {
+    throw Error('A collector number requires a set code.');
   }
 
-  const found = await request(
-    `cards/${encodeURIComponent(set)}/${encodeURIComponent(number)}`
-  );
+  const path = set && number
+    ? `cards/${encodeURIComponent(set)}/${encodeURIComponent(number)}`
+    : 'cards/named?exact=' + encodeURIComponent(name.trim()) +
+      (set ? '&set=' + encodeURIComponent(set) : '');
 
   const matchesName = [
     found.name,
