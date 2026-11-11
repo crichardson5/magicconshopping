@@ -1,5 +1,5 @@
 import { normalizeCards, normalizeListName, parseDecklist, mergeDuplicates } from './card-data.js';
-import { autocomplete, findCard, validateCards } from './scryfall.js';
+import { autocomplete, findPrinting, validateCards } from './scryfall.js';
 
 const $ = id => document.getElementById(id);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -147,10 +147,22 @@ export function setupListTools(api) {
     $('singleCardPreview').textContent = card.qty + ' × ' + card.name + ' · ' + card.deck +
       (card.note ? ' · ' + card.note : '') + (known ? ' — recognized by Scryfall' : ' — unverified');
   }
-  function singleInput() {
-    return normalizeCards([{ name: $('cardName').value, qty: $('cardQuantity').value,
-      deck: $('cardCategory').value, note: $('cardNotes').value }])[0];
-  }
+  
+function singleInput() {
+  const finish = $('cardFinish').value;
+  const note = $('cardNotes').value.trim();
+  const finishNote = finish ? `Finish: ${finish}` : '';
+
+  return normalizeCards([{
+    name: $('cardName').value,
+    qty: $('cardQuantity').value,
+    deck: $('cardCategory').value,
+    note: [note, finishNote].filter(Boolean).join(' | '),
+    setCode: $('cardSetCode').value,
+    collectorNumber: $('cardCollectorNumber').value
+  }])[0];
+}
+
   $('addCard').onclick = () => {
     if (!api.canWrite() || !api.activeId()) return;
     addTarget = api.activeId();
@@ -164,7 +176,7 @@ export function setupListTools(api) {
     $('cardName').focus();
   };
   $('addCardForm').oninput = event => {
-    if (!['cardName', 'cardQuantity', 'cardCategory', 'cardNotes'].includes(event.target.id)) return;
+    if (!['cardName', 'cardQuantity', 'cardCategory', 'cardNotes', 'cardSetCode', 'cardCollectorNumber', 'cardFinish'].includes(event.target.id)) return;
     previewedCard = null;
     lookupVersion++;
     $('singleCardPreview').textContent = 'Preview the card before adding it.';
@@ -181,24 +193,53 @@ export function setupListTools(api) {
       } catch (error) { if (version === lookupVersion) $('cardMessage').textContent = 'Autocomplete unavailable. Enter a name and use Preview card.'; }
     }, 400);
   };
+  
   $('previewCard').onclick = async () => {
     if (adding) return;
+
     let card;
+
     try {
       card = singleInput();
       adding = true;
       lock($('addCardDialog'), true);
-      $('cardMessage').textContent = 'Looking up card…';
-      const found = await findCard(card.name);
-      previewedCard = { ...card, name: found.name, colorIdentity: found.color_identity, scryfallId: null };
+      $('cardMessage').textContent = 'Looking up printing…';
+
+      const found = await findPrinting(card.name, card.setCode, card.collectorNumber);
+      const finish = $('cardFinish').value;
+
+      if (finish && !found.finishes?.includes(finish) && card.setCode) {
+        throw Error(`This printing is not available in ${finish}.`);
+      }
+
+      previewedCard = {
+        ...card,
+        name: found.name,
+        colorIdentity: found.color_identity,
+        setCode: card.setCode ? found.set : '',
+        collectorNumber: card.setCode ? found.collector_number : '',
+        scryfallId: card.setCode ? found.id : null
+      };
+
       showCardPreview(previewedCard, true);
+
+      if (card.setCode) {
+        $('singleCardPreview').textContent +=
+          ` · ${found.set.toUpperCase()} #${found.collector_number}` +
+          (finish ? ` · ${finish}` : '');
+      }
+
       $('cardMessage').textContent = '';
     } catch (error) {
-      previewedCard = card ? { ...card, unverified: true } : null;
-      if (previewedCard) showCardPreview(previewedCard, false);
+      previewedCard = null;
+      $('singleCardPreview').textContent = '';
       $('cardMessage').textContent = error.message;
-    } finally { adding = false; lock($('addCardDialog'), false); }
+    } finally {
+      adding = false;
+      lock($('addCardDialog'), false);
+    }
   };
+
   $('addCardForm').onsubmit = async event => {
     event.preventDefault();
     if (adding) return;

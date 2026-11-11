@@ -35,6 +35,27 @@ export async function findCard(name) {
   if (!cache.has(key)) cache.set(key, await request('cards/named?exact=' + encodeURIComponent(name.trim())));
   return cache.get(key);
 }
+
+export async function findPrinting(name, setCode = '', collectorNumber = '') {
+  const set = setCode.trim().toLowerCase();
+  const number = collectorNumber.trim();
+
+  const path = set && number
+    ? `cards/${encodeURIComponent(set)}/${encodeURIComponent(number)}`
+    : 'cards/named?exact=' + encodeURIComponent(name.trim()) +
+      (set ? '&set=' + encodeURIComponent(set) : '');
+
+  const card = await request(path);
+
+  const matchesName = [card.name, ...(card.card_faces || []).map(face => face.name)]
+    .some(value => value.toLowerCase() === name.trim().toLowerCase());
+
+  if (!matchesName) throw Error('That printing belongs to a different card.');
+  if (card.digital || !card.games?.includes('paper')) throw Error('That printing is not available in paper.');
+
+  return card;
+}
+
 const sameName = (card, name) => [card.name, ...(card.card_faces || []).map(face => face.name)]
   .some(value => value.toLowerCase() === name.toLowerCase());
 
