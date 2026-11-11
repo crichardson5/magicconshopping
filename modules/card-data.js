@@ -2,12 +2,16 @@
 export const COLOR_ORDER = ['W', 'U', 'B', 'R', 'G'];
 
 export function normalizeCards(input, { allowEmpty = false } = {}) {
+
   const entries = Array.isArray(input) ? input : input?.cards;
+
   if (!Array.isArray(entries) || entries.length > 500 || (!allowEmpty && !entries.length)) {
     throw Error('Provide ' + (allowEmpty ? '0' : '1') + '–500 cards.');
   }
+
   return entries.map((entry, index) => {
     if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw Error('Invalid card ' + (index + 1));
+    
     const name = String(entry.name || '').trim();
     const deck = String(entry.deck || 'Unassigned').trim() || 'Unassigned';
     const note = String(entry.note || '');
@@ -27,7 +31,13 @@ export function normalizeCards(input, { allowEmpty = false } = {}) {
     if (setCode && !/^[a-z0-9]{2,10}$/.test(setCode)) throw Error('Invalid set code at card ' + (index + 1));
     if (collectorNumber.length > 30 || (collectorNumber && !setCode)) throw Error('Collector number requires a set code (card ' + (index + 1) + ').');
     if (scryfallId && !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(scryfallId)) throw Error('Invalid Scryfall ID.');
-    return { name, deck, qty, note, colorIdentity: identity === null ? null : COLOR_ORDER.filter(c => identity.includes(c)), setCode, collectorNumber, scryfallId };
+    
+    const finish = String(entry.finish ?? '').trim().toLowerCase();
+    if (finish && !['nonfoil', 'foil', 'etched'].includes(finish)) {
+      throw Error('Invalid finish at card ' + (index + 1));
+    }
+
+    return { name, deck, qty, note, colorIdentity: identity === null ? null : COLOR_ORDER.filter(c => identity.includes(c)), setCode, collectorNumber, scryfallId, finish};
   });
 }
 
@@ -65,8 +75,18 @@ export function parseDecklist(text) {
 export function mergeDuplicates(cards) {
   const merged = new Map();
   for (const card of normalizeCards(cards, { allowEmpty: true })) {
+
     // Different categories, notes, or requested printings remain separate entries.
-    const key = JSON.stringify([card.name.toLowerCase(), card.deck.toLowerCase(), card.note, card.setCode, card.collectorNumber]);
+    const key = JSON.stringify([
+      card.name.toLowerCase(), 
+      card.deck.toLowerCase(), 
+      card.note, 
+      card.setCode, 
+      card.collectorNumber, 
+      card.scryfallId, 
+      card.finish
+    ]);
+
     const existing = merged.get(key);
     if (existing) {
       existing.qty += card.qty;

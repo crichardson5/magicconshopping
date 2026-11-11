@@ -36,25 +36,35 @@ export async function findCard(name) {
   return cache.get(key);
 }
 
-export async function findPrinting(name, setCode = '', collectorNumber = '') {
+
+export async function findPrinting(name, setCode, collectorNumber) {
   const set = setCode.trim().toLowerCase();
   const number = collectorNumber.trim();
 
-  const path = set && number
-    ? `cards/${encodeURIComponent(set)}/${encodeURIComponent(number)}`
-    : 'cards/named?exact=' + encodeURIComponent(name.trim()) +
-      (set ? '&set=' + encodeURIComponent(set) : '');
+  if (!set || !number) {
+    throw Error('Enter both a set code and collector number.');
+  }
 
-  const card = await request(path);
+  const found = await request(
+    `cards/${encodeURIComponent(set)}/${encodeURIComponent(number)}`
+  );
 
-  const matchesName = [card.name, ...(card.card_faces || []).map(face => face.name)]
-    .some(value => value.toLowerCase() === name.trim().toLowerCase());
+  const matchesName = [
+    found.name,
+    ...(found.card_faces || []).map(face => face.name)
+  ].some(value => value.toLowerCase() === name.trim().toLowerCase());
 
-  if (!matchesName) throw Error('That printing belongs to a different card.');
-  if (card.digital || !card.games?.includes('paper')) throw Error('That printing is not available in paper.');
+  if (!matchesName) {
+    throw Error('That printing belongs to a different card.');
+  }
 
-  return card;
+  if (found.digital || !found.games?.includes('paper')) {
+    throw Error('That printing is not available in paper.');
+  }
+
+  return found;
 }
+
 
 const sameName = (card, name) => [card.name, ...(card.card_faces || []).map(face => face.name)]
   .some(value => value.toLowerCase() === name.toLowerCase());

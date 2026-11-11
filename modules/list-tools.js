@@ -1,5 +1,5 @@
 import { normalizeCards, normalizeListName, parseDecklist, mergeDuplicates } from './card-data.js';
-import { autocomplete, findPrinting, validateCards } from './scryfall.js';
+import { autocomplete, findCard, findPrinting, validateCards } from './scryfall.js';
 
 const $ = id => document.getElementById(id);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -156,7 +156,8 @@ function singleInput() {
   return normalizeCards([{
     name: $('cardName').value,
     qty: $('cardQuantity').value,
-    deck: $('cardCategory').value,
+    deck: $('cardCategory').value,  
+    finish: $('cardFinish').value,
     note: [note, finishNote].filter(Boolean).join(' | '),
     setCode: $('cardSetCode').value,
     collectorNumber: $('cardCollectorNumber').value

@@ -81,6 +81,7 @@ function setAuthVisible(signedIn) {
   $('signedInPanel').hidden = !signedIn;
   $('app').hidden = !signedIn;
 }
+
 async function loadLists(preferredId = activeId) {
   const request = ++listRequest;
   const epoch = generation;
@@ -102,6 +103,7 @@ async function loadLists(preferredId = activeId) {
   $('removeList').hidden = !activeList() || activeList()?.created_by !== user?.id;
   await loadItems();
 }
+
 async function loadItems() {
   const requestedId = activeId;
   const requestId = ++itemRequest;
@@ -216,9 +218,13 @@ function render() {
         const searchText = `${card.deck} ${card.item_name} ${card.notes || ''}`.toLowerCase();
 
         const notes = card.notes ? `<small>${html(card.notes)}</small>` : '';
+
         const printing = card.set_code
-          ? `<small>Requested printing: ${html(card.set_code.toUpperCase())} ${html(card.collector_number || '')}</small>`
-          : '';
+          ? `<small>Requested printing: ${html(card.set_code.toUpperCase())} ${html(card.collector_number || '')}${card.finish ? ` · ${html(card.finish)}` : ''}</small>`
+          : card.finish
+            ? `<small>Preferred finish: ${html(card.finish)}</small>`
+            : '';
+
 
         return `
           <tr data-id="${html(card.id)}" data-search="${html(searchText)}" class="${purchased}">
@@ -694,6 +700,59 @@ function batchItems(array, size) {
 }
 
 
+async function priceExactPrinting(item) {
+  const set = encodeURIComponent(item.set_code);
+  const number = encodeURIComponent(item.collector_number);
+
+  const response = await fetch(
+    `https://api.scryfall.com/cards/${set}/${number}`,
+    { headers: { Accept: 'application/json' } }
+  );
+
+  if (!response.ok) {
+    throw Error(`Could not retrieve ${item.item_name} (${item.set_code} #${item.collector_number}).`);
+  }
+
+  const printing = await response.json();
+
+  const names = [
+    printing.name,
+    ...(printing.card_faces || []).map(face => face.name)
+  ];
+
+  if (!names.some(name => name.toLowerCase() === item.item_name.toLowerCase())) {
+    throw Error('Saved printing does not match the card name.');
+  }
+
+  if (item.scryfall_id && printing.id !== item.scryfall_id) {
+    throw Error('Saved Scryfall ID does not match the requested printing.');
+  }
+
+  if (printing.digital || !printing.games?.includes('paper')) {
+    throw Error('Requested printing is not a paper card.');
+  }
+
+  const fieldByFinish = {
+    nonfoil: 'usd',
+    foil: 'usd_foil',
+    etched: 'usd_etched'
+  };
+
+  const fields = item.finish
+    ? [fieldByFinish[item.finish]]
+    : ['usd', 'usd_foil', 'usd_etched'];
+
+  const prices = fields
+    .map(field => Number(printing.prices?.[field]))
+    .filter(price => Number.isFinite(price) && price > 0);
+
+  return {
+    price: prices.length ? Math.min(...prices) : null,
+    colorIdentity: printing.color_identity
+  };
+}
+
+
 async function loadPrices() {
   if (syncing) return;
 
@@ -701,40 +760,169 @@ async function loadPrices() {
   $('load').disabled = true;
 
   const listId = activeId;
-  const cards = items.filter(item =>
-    item.item_type === 'card' &&
-    (
-      item.estimated_price == null ||
-      !Array.isArray(item.color_identity)
-    )
+  const epoch = generation;
+
+  const cards = items.filter(card =>
+    card.item_type === 'card' &&
+    (card.estimated_price == null || !Array.isArray(card.color_identity))
   );
 
-  // Group by printing preference to preserve foil,
-  // etched, and Secret Lair restrictions.
-  const groups = new Map();
+  let updated = 0;
+  let unavailable = 0;
+  let requests = 0;
+  let rateLimited = false;
 
-  for (const card of cards) {
+  const stillActive = () =>
+    activeId === listId && generation === epoch;
+
+  // Apply the existing request delay to all Scryfall calls.
+  async function scryfallRequest(url) {
+    if (requests > 0) await wait(SCRYFALL_REQUEST_DELAY);
+    requests++;
+
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' }
+    });
+
+    if (response.status === 429) {
+      rateLimited = true;
+      throw Error('Scryfall rate limit reached.');
+    }
+
+    if (!response.ok) {
+      throw Error(`Scryfall returned HTTP ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  function getPreference(card) {
     const notes = (card.notes || '').toLowerCase();
 
+    const finish = card.finish ||
+      (notes.includes('confetti') ? 'confetti' :
+       notes.includes('nonfoil') ? 'nonfoil' :
+       notes.includes('etched') ? 'etched' :
+       notes.includes('foil') ? 'foil' : 'nonfoil');
 
-    const finish = notes.includes('confetti')
-      ? 'confetti'
-      : notes.includes('etched')
-        ? 'etched'
-        : notes.includes('foil')
-          ? 'foil'
-          : 'nonfoil';
+    const secretLair = /\bsecret lair\b|\bsld\b/i.test(notes);
 
-    const secretLair =
-      notes.includes('secret lair') ||
-      notes.includes('sld');
+    return { finish, secretLair };
+  }
 
-    const groupKey = `${finish}:${secretLair}`;
+  function getPrice(printing, finish) {
+    const field = {
+      nonfoil: 'usd',
+      foil: 'usd_foil',
+      confetti: 'usd_foil',
+      etched: 'usd_etched'
+    };
+
+    const fields = finish
+      ? [field[finish]]
+      : ['usd', 'usd_foil', 'usd_etched'];
+
+    const prices = fields
+      .map(key => printing.prices?.[key])
+      .filter(value => value != null)
+      .map(Number)
+      .filter(value => Number.isFinite(value) && value > 0);
+
+    return prices.length ? Math.min(...prices) : null;
+  }
+
+  function matchesName(printing, name) {
+    return [
+      printing.name,
+      ...(printing.card_faces || []).map(face => face.name)
+    ].some(value => value.toLowerCase() === name.toLowerCase());
+  }
+
+  function matchesFinish(printing, finish) {
+    if (finish === 'confetti') {
+      return printing.finishes?.includes('foil') &&
+        /confetti/i.test([
+          printing.frame_effects?.join(' '),
+          printing.promo_types?.join(' '),
+          printing.full_art ? 'full art' : ''
+        ].join(' '));
+    }
+
+    return !finish || printing.finishes?.includes(finish);
+  }
+
+  function getResult(printing, finish) {
+    return {
+      price: getPrice(printing, finish),
+      colorIdentity: Array.isArray(printing.color_identity)
+        ? colorOrder.filter(color => printing.color_identity.includes(color))
+        : null
+    };
+  }
+
+  async function saveResult(card, result) {
+    if (!stillActive()) return;
+
+    const changes = {};
+
+    if (result.price != null) {
+      changes.estimated_price = result.price;
+    }
+
+    if (result.colorIdentity != null) {
+      changes.color_identity = result.colorIdentity;
+    }
+
+    if (!Object.keys(changes).length) {
+      unavailable++;
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('shopping_list_items')
+      .update(changes)
+      .eq('id', card.id)
+      .eq('list_id', listId)
+      .select()
+      .single();
+
+    if (error) {
+      unavailable++;
+      console.warn('Could not save price:', card.item_name, error);
+      return;
+    }
+
+    if (!stillActive()) return;
+
+    const index = items.findIndex(item => item.id === card.id);
+    if (index >= 0) items[index] = data;
+
+    updated++;
+  }
+
+  // Exact printings are handled individually.
+  const exactCards = cards.filter(card =>
+    card.set_code && card.collector_number
+  );
+
+  // Everything else uses the existing batched search.
+  // Set-only requests are restricted to their requested set.
+  const flexibleCards = cards.filter(card =>
+    !(card.set_code && card.collector_number)
+  );
+
+  const groups = new Map();
+
+  for (const card of flexibleCards) {
+    const { finish, secretLair } = getPreference(card);
+    const setCode = (card.set_code || '').toLowerCase();
+    const groupKey = JSON.stringify([finish, secretLair, setCode]);
 
     if (!groups.has(groupKey)) {
       groups.set(groupKey, {
         finish,
         secretLair,
+        setCode,
         cards: []
       });
     }
@@ -745,200 +933,203 @@ async function loadPrices() {
   const batches = [];
 
   for (const group of groups.values()) {
-    // Deduplicate names within each preference group.
-    const names = [...new Set(
-      group.cards.map(card => card.item_name)
-    )];
+    const names = [...new Set(group.cards.map(card => card.item_name))];
 
     for (const batch of batchItems(names, SCRYFALL_BATCH_SIZE)) {
       batches.push({ ...group, names: batch });
     }
   }
 
-  let updated = 0;
-  let unavailable = 0;
-  let requests = 0;
-  let rateLimited = false;
-
   try {
-    for (let i = 0; i < batches.length; i++) {
-      if (activeId !== listId) break;
+    // ----------------------------------------
+    // 1. Price exact printings
+    // ----------------------------------------
 
-      const batch = batches[i];
-      const escapeName = name =>
-        name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    for (let i = 0; i < exactCards.length; i++) {
+      if (!stillActive()) break;
 
-      const query =
-        '(' +
-        batch.names.map(name => `!"${escapeName(name)}"`).join(' OR ') +
-        ') game:paper' +
-        (batch.secretLair ? ' set:sld' : '') +
-        (batch.finish === 'foil' ? ' finish:foil' : '') +
-        (batch.finish === 'confetti' ? ' is:confetti' : '') +
-        (batch.finish === 'etched' ? ' finish:etched' : '');
+      const card = exactCards[i];
+      const { finish } = getPreference(card);
 
-      let url = 'https://api.scryfall.com/cards/search?' +
-        new URLSearchParams({
-          q: query,
-          unique: 'prints',
-          order: 'usd',
-          dir: 'asc'
-        });
+      message(`Checking exact printing ${i + 1}/${exactCards.length}: ${card.item_name}…`);
 
-      const results = new Map();
+      try {
+        const set = encodeURIComponent(card.set_code);
+        const number = encodeURIComponent(card.collector_number);
 
-      message(
-        `Checking Scryfall batch ${i + 1}/${batches.length}...`
-      );
+        const printing = await scryfallRequest(
+          `https://api.scryfall.com/cards/${set}/${number}`
+        );
 
-      // Follow every page to avoid missing lower prices
-      // for foil or etched printings.
-      while (url) {
-        if (requests > 0) {
-          await wait(SCRYFALL_REQUEST_DELAY);
+        if (!stillActive()) break;
+
+        if (!matchesName(printing, card.item_name)) {
+          unavailable++;
+          console.warn('Printing name mismatch:', card.item_name);
+          continue;
         }
 
-        requests++;
-
-        const response = await fetch(url, {
-          headers: {
-            Accept: 'application/json'
-          }
-        });
-
-        if (response.status === 429) {
-          rateLimited = true;
-          break;
+        if (card.scryfall_id && printing.id !== card.scryfall_id) {
+          unavailable++;
+          console.warn('Printing ID mismatch:', card.item_name);
+          continue;
         }
 
-        if (!response.ok) {
-          throw new Error(
-            `Scryfall returned HTTP ${response.status}`
-          );
+        if (printing.digital || !printing.games?.includes('paper')) {
+          unavailable++;
+          continue;
         }
 
-        const data = await response.json();
-
-        for (const printing of data.data || []) {
-          const name = printing.name;
-
-          if (!batch.names.includes(name)) continue;
-
-          const priceField = {
-            nonfoil: 'usd',
-            confetti: 'usd_foil',
-            foil: 'usd_foil',
-            etched: 'usd_etched'
-          }[batch.finish];
-
-          const rawPrice = printing.prices?.[priceField];
-
-          const price = rawPrice == null
-            ? null
-            : Number(rawPrice);
-
-          const current = results.get(name) || {
-            price: null,
-            colorIdentity: null
-          };
-
-          if (
-            price != null &&
-            Number.isFinite(price) &&
-            price > 0 &&
-            (current.price == null || price < current.price)
-          ) {
-            current.price = price;
-          }
-
-          if (Array.isArray(printing.color_identity)) {
-            current.colorIdentity = colorOrder.filter(color =>
-              printing.color_identity.includes(color)
-            );
-          }
-
-          results.set(name, current);
+        if (!matchesFinish(printing, finish)) {
+          unavailable++;
+          console.warn('Requested finish unavailable:', card.item_name, finish);
+          continue;
         }
 
-        url = data.has_more ? data.next_page : null;
+        await saveResult(card, getResult(printing, finish));
+      } catch (error) {
+        if (rateLimited) break;
+        unavailable++;
+        console.warn('Exact printing lookup failed:', card.item_name, error);
       }
-
-      // Do not save incomplete batch results after a 429.
-      if (rateLimited) break;
-
-      const matchedCards = batch.cards.filter(card =>
-        batch.names.includes(card.item_name)
-      );
-
-      for (const card of matchedCards) {
-        if (activeId !== listId) break;
-
-        const result = results.get(card.item_name);
-
-        if (!result) {
-          unavailable++;
-          continue;
-        }
-
-        const changes = {};
-
-        if (result.price != null) {
-          changes.estimated_price = result.price;
-        }
-
-        if (result.colorIdentity != null) {
-          changes.color_identity = result.colorIdentity;
-        }
-
-        if (!Object.keys(changes).length) {
-          unavailable++;
-          continue;
-        }
-
-        const { data, error } = await supabase
-          .from('shopping_list_items')
-          .update(changes)
-          .eq('id', card.id)
-          .eq('list_id', listId)
-          .select()
-          .single();
-
-        if (error) {
-          unavailable++;
-          continue;
-        }
-
-        const index = items.findIndex(item => item.id === card.id);
-
-        if (index >= 0 && activeId === listId) {
-          items[index] = data;
-        }
-
-        updated++;
-      }
-
-      render();
     }
 
-    if (rateLimited) {
-      message(
-        'Scryfall rate limit reached. Stopped requests. ' +
-        'Saved completed batches remain available.'
-      );
-    } else {
-      message(
-        `Pricing finished: ${updated} updated, ` +
-        `${unavailable} unavailable.`
-      );
+    // ----------------------------------------
+    // 2. Price flexible printings in batches
+    // ----------------------------------------
+
+    if (!rateLimited) {
+      for (let i = 0; i < batches.length; i++) {
+        if (!stillActive()) break;
+
+        const batch = batches[i];
+
+        const escapeName = name =>
+          name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+        const query =
+          '(' +
+          batch.names.map(name => `!"${escapeName(name)}"`).join(' OR ') +
+          ') game:paper' +
+          (batch.setCode ? ` set:${batch.setCode}` :
+           batch.secretLair ? ' set:sld' : '') +
+          (batch.finish === 'foil' ? ' finish:foil' : '') +
+          (batch.finish === 'etched' ? ' finish:etched' : '') +
+          (batch.finish === 'confetti' ? ' is:confetti' : '');
+
+        let url = 'https://api.scryfall.com/cards/search?' +
+          new URLSearchParams({
+            q: query,
+            unique: 'prints',
+            order: 'usd',
+            dir: 'asc'
+          });
+
+        const results = new Map();
+
+        message(`Checking Scryfall batch ${i + 1}/${batches.length}…`);
+
+        while (url && stillActive()) {
+          let data;
+
+          try {
+            data = await scryfallRequest(url);
+          } catch (error) {
+            if (rateLimited) break;
+
+            // A search with no results returns HTTP 404.
+            if (/HTTP 404/.test(error.message)) {
+              unavailable += batch.cards.filter(card =>
+                batch.names.includes(card.item_name)
+              ).length;
+              url = null;
+              break;
+            }
+
+            throw error;
+          }
+
+          for (const printing of data.data || []) {
+            if (!printing.games?.includes('paper') || printing.digital) continue;
+
+            const name = batch.names.find(candidate =>
+              matchesName(printing, candidate)
+            );
+
+            if (!name) continue;
+            if (!matchesFinish(printing, batch.finish)) continue;
+
+            const result = getResult(printing, batch.finish);
+
+            const current = results.get(name) || {
+              price: null,
+              colorIdentity: null
+            };
+
+            if (
+              result.price != null &&
+              (current.price == null || result.price < current.price)
+            ) {
+              current.price = result.price;
+            }
+
+            if (result.colorIdentity != null) {
+              current.colorIdentity = result.colorIdentity;
+            }
+
+            results.set(name, current);
+          }
+
+          url = data.has_more ? data.next_page : null;
+        }
+
+        if (rateLimited || !stillActive()) break;
+
+        for (const card of batch.cards) {
+          if (!batch.names.includes(card.item_name)) continue;
+
+          const result = results.get(card.item_name);
+
+          if (!result) {
+            unavailable++;
+            continue;
+          }
+
+          await saveResult(card, result);
+        }
+
+        render();
+      }
+    }
+
+    // ----------------------------------------
+    // 3. Final status
+    // ----------------------------------------
+
+    if (stillActive()) {
+      if (rateLimited) {
+        message(
+          'Scryfall rate limit reached. Saved completed results; ' +
+          'please try again later.'
+        );
+      } else {
+        message(
+          `Pricing finished: ${updated} updated, ${unavailable} unavailable.`
+        );
+      }
     }
   } catch (error) {
-    message('Scryfall pricing stopped: ' + error.message);
+    if (stillActive()) {
+      message('Scryfall pricing stopped: ' + error.message);
+      console.error('Wishclaw pricing error:', error);
+    }
   } finally {
     syncing = false;
     $('load').disabled = false;
     render();
   }
 }
+
 
 const listTools = setupListTools({
   canWrite: () => approved && Boolean(user),
